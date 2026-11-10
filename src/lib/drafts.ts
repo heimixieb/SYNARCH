@@ -127,9 +127,10 @@ export function getDraftChannelMode(store: Store, id: string, fallback: ChannelM
   const memory = memoryFor(store, channelModesByStore, fallbackChannelModes);
   if (memory.has(id)) return memory.get(id)!;
   const saved = read(store, CHANNEL_MODES_KEY)[id];
-  const mode = saved === "goal" || saved === "chat" ? saved : fallback;
-  memory.set(id, mode);
-  return mode;
+  // Only a mode someone chose is remembered: the default follows the conversation, which may be known only later (a chief's).
+  if (saved !== "goal" && saved !== "chat") return fallback;
+  memory.set(id, saved);
+  return saved;
 }
 
 /** Back to the conversation's own default mode, whatever that is. */

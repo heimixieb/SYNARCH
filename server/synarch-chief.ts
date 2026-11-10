@@ -190,7 +190,7 @@ export function createSynarchChiefRoutes(deps: {
     } catch (error) {
       return json(res, 409, { error: `No goal started: ${error instanceof Error ? error.message : String(error)}` });
     }
-    return json(res, 200, { text: "Goal started. Say in one short line that you are on it, then end this turn: the goal run resumes you here, and the work is checked by another model before it counts as done." });
+    return json(res, 200, { text: `Goal started. Say in one short line that you are on it, then end this turn: the goal run resumes you here${readSynarchSettings(deps.dataDir).checkGoals ? ", and the work is checked by another model before it counts as done" : " until you report it done"}.` });
   };
 }
 
