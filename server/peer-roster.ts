@@ -1,4 +1,5 @@
 import { botOwner } from "../shared/bot-owner.ts";
+import { managesSection } from "../shared/managed-sections.ts";
 import { sameAudience } from "./bot-visibility.ts"; import type { DefaultBotFields } from "../shared/default-bot.ts";
 import type { BotActivity } from "./store.ts";
 
@@ -40,9 +41,7 @@ export function hasTeamAuthority(
   section?: string,
 ): boolean {
   const target = sectionKey(section);
-  return target === sectionKey(from.section) || Boolean(from.chiefOfStaff &&
-    Array.isArray(from.managedSections) && from.managedSections.some(value =>
-      typeof value === "string" && sectionKey(value) === target));
+  return target === sectionKey(from.section) || Boolean(from.chiefOfStaff && managesSection(from.managedSections, target));
 }
 
 /** A Team Cloud Chief its person owns: that person's email. */

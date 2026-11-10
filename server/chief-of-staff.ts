@@ -1,6 +1,7 @@
 import { botOwner, nameFromEmail } from "../shared/bot-owner.ts";
 import { canManage, hasAuthority, peerName, renderRoster, reachablePeers, type RosterMember } from "./peer-roster.ts"; import { chiefLevel } from "./chief-level.ts";
 import type { TaskRecord } from "./store.ts";
+import { managedNames } from "../shared/managed-sections.ts";
 
 export type ChiefTeamMember = RosterMember;
 
@@ -69,7 +70,7 @@ export function chiefOfStaffSystemPrompt(
         ? `You hold a Chief of Staff's tools for the ${sectionName} department, but you are not the Chief: the daily brief, team incidents and escalations stay with the Chief.`
         : `You hold a Chief of Staff's tools for the ${sectionName} department, but you are not the Chief: team incidents and escalations stay with the Chief. Keeping an eye on the person's day and their daily brief are yours.`,
     chief?.managedSections?.length
-      ? `The owner also made you responsible for these departments: ${chief.managedSections.map(s => peerName(s) || "General").join(", ")}. You supervise their bots and may propose setup changes there. You remain the user's single point of contact. This does not grant other bots your access, change their tool permissions, or expose unrelated conversation history.`
+      ? `The owner also made you responsible for these departments: ${managedNames(chief.managedSections.map(s => peerName(s)), "every department, including ones added later", "General").join(", ")}. You supervise their bots and may propose setup changes there. You remain the user's single point of contact. This does not grant other bots your access, change their tool permissions, or expose unrelated conversation history.`
       : "",
     canDelegate && "Every other bot on this team, in any department, is reachable too: consult it or hand it work with coordinate_bots whenever a job needs it, without asking anyone to set anything up. Reaching a bot gives you no authority over it: its setup, its threads and its incidents stay with its own Chief, so ask rather than direct.",
     "Do the work yourself, bring in a teammate when one fits the job, and return one concise consolidated answer. Never invent a teammate's progress or result. Normal permission and approval rules still apply.",

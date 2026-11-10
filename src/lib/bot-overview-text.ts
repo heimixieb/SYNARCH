@@ -2,6 +2,7 @@ import { locales, type LocaleKey } from "@/locales";
 import { activeLocale, t } from "@/lib/i18n";
 import { niceTime, scheduleLabel } from "@/lib/schedule-label";
 import type { OverviewRoutineLine } from "@/lib/bot-overview-types";
+import { managedNames } from "../../shared/managed-sections";
 
 const LAST_RUN: Record<string, LocaleKey> = {
   completed: "botOverview.routine.last.completed", failed: "botOverview.routine.last.failed", missed: "botOverview.routine.last.missed",
@@ -51,8 +52,8 @@ const PREFERENCE: Record<string, LocaleKey> = {
 
 /** Only the unnamed department, which the server marks with "" in `managedSections`, gets its label; every name is data. */
 function managedTeams(english: string, managedSections: readonly string[] | undefined): string {
-  if (!managedSections || managedSections.map((name) => name || "General").join(", ") !== english) return english;
-  return managedSections.map((name) => name || t("botAccess.teams.general")).join(", ");
+  if (!managedSections || managedNames(managedSections, "every department, including new ones", "General").join(", ") !== english) return english;
+  return managedNames(managedSections, t("botAccess.teams.all"), t("botAccess.teams.general")).join(", ");
 }
 
 const preference = (words: string): string => (Object.hasOwn(PREFERENCE, words) ? t(PREFERENCE[words]!) : words);

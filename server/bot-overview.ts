@@ -3,6 +3,7 @@ import type { Routine } from "./routines.ts";
 import type { RoutineRequestSchedule } from "../shared/routine-request.ts";
 import { approvalModeFor } from "../shared/approval-mode.ts";
 import { cronScheduleLabel } from "../shared/cron-label.ts";
+import { managedNames } from "../shared/managed-sections.ts";
 
 export interface BotOverview {
   who: { name: string; title: string; blurb: string; soulLead: string };
@@ -251,7 +252,7 @@ function reachesLines(facts: OverviewFacts): string[] {
   }
   if (facts.bot.chiefOfStaff) lines.push("Coordinates its department as Chief of Staff.");
   if (facts.bot.chiefOfStaff && facts.bot.managedSections?.length) {
-    lines.push(`Also in charge of these departments: ${facts.bot.managedSections.map(name => name || "General").join(", ")}.`);
+    lines.push(`Also in charge of these departments: ${managedNames(facts.bot.managedSections, "every department, including new ones", "General").join(", ")}.`);
   }
   return lines;
 }

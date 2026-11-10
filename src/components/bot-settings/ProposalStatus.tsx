@@ -1,6 +1,7 @@
 import { t } from "@/lib/i18n";
 import { useStore, type Bot } from "@/state/store";
 import { useBotEditor } from "./BotEditorContext";
+import { managesSection } from "../../../shared/managed-sections";
 
 const sectionKey = (section?: string | null) => (section ?? "").trim();
 
@@ -10,9 +11,7 @@ function chiefCovers(bot: Bot, bots: ReadonlyArray<Bot>): boolean {
   return bots.some((candidate) =>
     candidate.id !== bot.id &&
     Boolean(candidate.chiefOfStaff) &&
-    (sectionKey(candidate.section) === target ||
-      (Array.isArray(candidate.managedSections) &&
-        candidate.managedSections.some((team) => typeof team === "string" && sectionKey(team) === target))));
+    (sectionKey(candidate.section) === target || managesSection(candidate.managedSections, target)));
 }
 
 export function ProposalStatus({ bot, kind }: { bot: Bot; kind: "chief" | "owner" }) {

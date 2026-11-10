@@ -116,6 +116,12 @@ describe("Chief authority over additional departments", () => {
     expect(hasTeamAuthority({ ...chief, managedSections: [null] as unknown as string[] }, "Personal")).toBe(false);
     expect(hasTeamAuthority({ ...chief, managedSections: [""] }, undefined)).toBe(true);
   });
+  it("covers every department, including ones added later, when a Chief manages all of them", () => {
+    const global = { ...chief, managedSections: ["*"] };
+    for (const section of ["Personal", "Finance", "", undefined, "Made tomorrow"]) expect(hasTeamAuthority(global, section)).toBe(true);
+    expect(hasTeamAuthority({ ...global, chiefOfStaff: false }, "Finance")).toBe(false);
+    expect(chiefOfStaffSystemPrompt(global.id, [global], true)).toContain("responsible for these departments: every department, including ones added later.");
+  });
 });
 
 describe("reach across departments", () => {

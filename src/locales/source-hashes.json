@@ -41441,7 +41441,8 @@
       "newLook.body": "c579dd8801158623c79d316c57b335e106281b19e30d3459892441b7bcd54b2e",
       "task.failed": "031a8f0f659df890dfd53c92e45295b0f14c997185bae46e168831e403b273f7",
       "automations.run.waitingOnTeam": "9765029257ea4e83e5f94c3e6d2dd37e11b5aa9459e50eeb878aaba8fbecd833",
-      "native.connect.desktopApp": "8a430f237e81cf9cca9ea0bb61a612ee0c408247919acbfeb9b76963b0c94ee2"
+      "native.connect.desktopApp": "8a430f237e81cf9cca9ea0bb61a612ee0c408247919acbfeb9b76963b0c94ee2",
+      "botAccess.teams.all": "872c38e56b708b56f50fa00c5b8ed911008af82f5de5e0eee88155c936e25401"
     },
     "zh-tw": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",

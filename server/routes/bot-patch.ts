@@ -27,6 +27,7 @@ import { profileSnapshot } from "../profile-revision.ts";
 import { recordProfileChange } from "../profile-versions.ts";
 import { memberBotPatchViolation, requestSource, type RequestAuth } from "../request-auth.ts"; import { defaultBotPatchRefusal, ownsDefaultBot } from "../default-bot.ts";
 import type { RoutineManager } from "../routines.ts";
+import { ALL_DEPARTMENTS } from "../../shared/managed-sections.ts";
 import type { SessionRegistry } from "../sessions.ts";
 import { parseConnectorTools } from "../connector-tools.ts";
 import { sectionKey, type BotRecord, type GroupRecord, type Store, type TaskRecord } from "../store.ts";
@@ -568,9 +569,9 @@ export function createBotPatchRoutes(deps: BotPatchRouteDeps): RouteHandler {
       if (body.managedSections !== undefined) {
         const parsed = z.array(z.string().trim().max(60)).max(100).safeParse(body.managedSections);
         if (!parsed.success) return json(res, 400, { error: "managedSections must be a list of up to 100 department names (60 characters each)" });
-        const sections = [...new Set(parsed.data)];
+        const sections = parsed.data.includes(ALL_DEPARTMENTS) ? [ALL_DEPARTMENTS] : [...new Set(parsed.data)];
         const newSections = sections.filter(section => !(existingBot?.managedSections ?? []).includes(section));
-        if (newSections.some(section => section !== "" && !store.sections.includes(section))) {
+        if (newSections.some(section => section !== "" && section !== ALL_DEPARTMENTS && !store.sections.includes(section))) {
           return json(res, 400, userError("serverError.department.createFirst"));
         }
         if (sections.length && !(body.chiefOfStaff === true || (existingBot?.chiefOfStaff && body.chiefOfStaff !== false))) {

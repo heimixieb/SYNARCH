@@ -6522,6 +6522,7 @@
   "botAccess.teams.general": "通用",
   "botAccess.teams.empty": "还没有其他部门。",
   "botAccess.teams.save": "保存部门",
+  "botAccess.teams.all": "所有部门（包括以后新建的）",
   "botAccess.cloud.provider": "云端提供方",
   "botAccess.cloud.backend": "云端后端",
   "botAccess.cloud.vpsDescription": "你自己的服务器，通过 SSH 连接。",

@@ -21,6 +21,7 @@ import { writeMemoryFile, writeMemoryTopic } from "../workspace.ts";
 import { refusalBody, userError } from "../user-errors.ts";
 import type { ServerErrorBody } from "../../shared/server-text.ts";
 import { PASS, type RouteHandler } from "./table.ts";
+import { ALL_DEPARTMENTS } from "../../shared/managed-sections.ts";
 
 export type ModelSelectionCheck = { ok: true; selection: ModelSelection } | ({ ok: false; status: number } & ServerErrorBody);
 
@@ -131,7 +132,7 @@ export function createBotCreateRoutes(deps: BotCreateRouteDeps): RouteHandler {
         return json(res, 400, { error: "Invalid MCP server selection" });
       }
       if (settings.managedSections?.length) {
-        if (!settings.chiefOfStaff || settings.managedSections.some(name => name !== "" && !store.sections.includes(name))) {
+        if (!settings.chiefOfStaff || settings.managedSections.some(name => name !== "" && name !== ALL_DEPARTMENTS && !store.sections.includes(name))) {
           return json(res, 400, userError("serverError.department.chiefOnlyExtra"));
         }
         if (body.acknowledgePeerScope !== true) return json(res, 400, userError("serverError.department.confirmExtra"));
