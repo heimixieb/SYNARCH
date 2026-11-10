@@ -104,6 +104,10 @@ export async function runRoomHandoffAgent(argv: string[], planPath: string, prom
   launch?: { integration: AgentsIntegration; system: string; evidence?: Record<string, unknown> },
   progress?: (text: string) => void, steered: () => readonly string[] = () => []): Promise<string> {
   const arg = (flag: string) => argv[argv.indexOf(flag) + 1];
+  // SYNARCH: a goal's independent check passes unscripted and leaves no evidence turn, as fake-claude-cli's default does.
+  if (JSON.stringify(prompt ?? "").includes("You are an independent verifier.")) {
+    return `Checked.\n<openmaus-goal>${JSON.stringify({ verdict: "pass", reason: "fixture check" })}</openmaus-goal>`;
+  }
   const mounted = launch ? [] : Object.values(JSON.parse(readAtLaunch(arg("--mcp-config"))).mcpServers as Record<string, AgentsIntegration>);
   // With a tool selection every server sits behind the gate, which names its upstream in OMB_GATE_UPSTREAM.
   const agentEnv = (server: AgentsIntegration): Record<string, string> => {
