@@ -4,6 +4,8 @@
 
 ## 第一次在新电脑上准备（只做一次）
 
+> 国内直连 GitHub 和 npm 很慢、还会断。下载前先在代理软件里打开「虚拟网卡（TUN）」，下面的步骤就都会走代理（完整下载仓库约 4 分钟，准备脚本约 4 分钟）。中途报网络错误，重新运行那一步即可。
+
 1. 安装这几样（已经装了就跳过）：
    - Git：https://git-scm.com/download/win
    - Node.js 24 或更新版本：https://nodejs.org （选 LTS 或 Current，版本号 24 以上）
@@ -30,7 +32,7 @@
    ```
 
    看到“准备完成”就可以了。
-5. 在 Claude 桌面版里打开这个文件夹，说“继续任务”。Claude 会自动读项目根目录的 `CLAUDE.md`（你的习惯和开发经验）和 `docs/synarch/02-roadmap.md`（做到哪了）。
+5. 在 Claude 桌面版里打开这个文件夹，说「继续任务」。Claude 会自动读项目根目录的 `CLAUDE.md`（你的习惯和开发经验）和 `docs/synarch/02-roadmap.md`（做到哪了）。
 
 ## 每次换电脑时
 

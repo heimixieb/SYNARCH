@@ -47,4 +47,4 @@ Step "类型检查（大约 2 分钟）"
 pnpm typecheck
 if ($LASTEXITCODE) { Fail "类型检查没通过，把上面的报错发给 Claude" }
 
-Write-Host "`n准备完成。在 Claude 里打开这个文件夹，说“继续任务”即可。" -ForegroundColor Green
+Write-Host "`n准备完成。在 Claude 里打开这个文件夹，说「继续任务」即可。" -ForegroundColor Green
