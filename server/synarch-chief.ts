@@ -3,6 +3,8 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import type { RuntimeEvent } from "../shared/runtime-events.ts";
+import type { ProviderAdapter } from "./contracts.ts";
 import { PASS, type RouteHandler } from "./routes/table.ts";
 
 export const MODEL_TAGS_MAX_CHARS = 200;
@@ -83,4 +85,63 @@ export function createSynarchChiefRoutes(deps: {
     }
     return json(res, 200, { text: "Goal started. Say in one short line that you are on it, then end this turn: the goal run resumes you here, and the work is checked by another model before it counts as done." });
   };
+}
+
+// The chief's hands are off in the conversations the person has with it (DeepSeek's Super-agent: the Router carries no
+// shell). Its turns there run at Ask, and this fence refuses every permission request that is not one of its team tools
+// (an MCP call), with a note to hand the job out; team tools go on to the person's own approval level. Allow-only on
+// purpose: an engine may label a sandbox escalation with a bare "tool", so no list of hands-on names is safe.
+// Conversations the chief or a check opened (openedBy) and routine runs keep their tools, for the workers it hands to.
+
+/** An MCP call, as Claude (mcp__server__tool), ACP titles (mcp__ / mcp. / mcp:) and Codex ("…MCP server to run tool…") name it. */
+export const isTeamToolRequest = (tool: string, summary: string) =>
+  /^mcp(?:__|[.:])/i.test(tool.trim()) || /^mcp(?:__|[.:])/i.test(summary.trim()) || /\bMCP server to run tool\b/.test(summary);
+
+export const CHIEF_HANDS_OFF = "Refused: you are the chief, so you plan, hand out and check work, and never run commands or change files yourself here. "
+  + "Hand this job to the model whose tags and record fit it with start_thread (model_selection, report_back true), or to a teammate with coordinate_bots, then end your turn.";
+
+/** Said with each turn here, since a refusal reaches some engines (DeepSeek's ACP) without its reason. */
+export const CHIEF_ROUTER_NOTE = "\n\n[In this conversation your own file and command tools are off: any write, edit or command is refused, and "
+  + "asking the person to approve it will not help. To get a file made or a command run, hand it out: start_thread with "
+  + "model_selection (pick by list_models tags and record) and report_back true, or coordinate_bots to a teammate. "
+  + "Never give the worker your folder's path: it cannot write there. Have it save in its own folder and attach the file "
+  + "with attach_file, then tell the person where it is.]";
+
+type ChiefBot = { chiefOfStaff?: boolean; threadId: string };
+type ChiefTask = { openedBy?: unknown; routineRunId?: string } | null | undefined;
+
+/** One of the person's own conversations with the chief: its main one or one they opened, never a routine run. */
+export function isChiefRouterThread(bot: ChiefBot | null | undefined, threadId: string, task: ChiefTask, routineRun: boolean): boolean {
+  if (!bot?.chiefOfStaff || routineRun) return false;
+  if (task) return !task.openedBy && !task.routineRunId;
+  return bot.threadId === threadId;
+}
+
+type RequestOpened = Extract<RuntimeEvent, { type: "request.opened" }>;
+type Say = (message: { role: "bot"; kind: "activity"; tool: { name: string; ok: boolean } }) => unknown;
+
+export function createChiefFence(deps: {
+  router(botId: string, threadId: string): boolean;
+  adapter(instanceId: string): Pick<ProviderAdapter, "respondToRequest" | "interruptTurn"> | undefined;
+  stale(event: RequestOpened): boolean;
+  release(threadId: string): void;
+}) {
+  /** True when the request asked the chief to act with its own hands here, and was refused before any grant or card. */
+  function answers(event: RequestOpened, asker: { id: string; modelSelection: { instanceId: string } }, say: Say): boolean {
+    if (event.requestType !== "permission" || isTeamToolRequest(event.tool, event.summary) || !deps.router(asker.id, event.threadId)) return false;
+    const adapter = deps.adapter(event.providerInstanceId ?? asker.modelSelection.instanceId);
+    say({ role: "bot", kind: "activity", tool: { name: `Handed out, not done here: ${event.summary.slice(0, 120)}`, ok: false } });
+    void (async () => {
+      try {
+        if (event.requestId === undefined || !adapter) throw new Error("no request to answer");
+        if (await adapter.respondToRequest(event.threadId, event.requestId, { behavior: "deny", message: CHIEF_HANDS_OFF }) === "unavailable") throw new Error("nobody took the answer");
+      } catch {
+        // A request nobody can refuse must not hang the turn: stop it instead.
+        if (event.turnId && !deps.stale(event)) await adapter?.interruptTurn(event.threadId, event.turnId).catch(() => {});
+      }
+      if (!deps.stale(event)) deps.release(event.threadId);
+    })().catch(() => console.error("[chief-fence] Could not refuse a request."));
+    return true;
+  }
+  return { confines: deps.router, answers };
 }

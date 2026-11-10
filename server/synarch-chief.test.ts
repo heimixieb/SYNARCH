@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { PASS } from "./routes/table.ts";
-import { createSynarchChiefRoutes, readModelTags, setModelTags, withModelTags } from "./synarch-chief.ts";
+import { CHIEF_HANDS_OFF, createChiefFence, createSynarchChiefRoutes, isChiefRouterThread, isTeamToolRequest, readModelTags, setModelTags, withModelTags } from "./synarch-chief.ts";
 
 const dirs: string[] = [];
 const dataDir = () => {
@@ -95,5 +95,56 @@ describe("chief routes", () => {
 
     const running = harness({ startGoal: () => { throw new Error("A goal is already running here."); } });
     expect(await running.call("/api/internal/goals", { goal: "again" })).toMatchObject({ status: 409, value: { error: "No goal started: A goal is already running here." } });
+  });
+});
+
+describe("the chief's hands are off in the person's conversations", () => {
+  it("lets only team tools through, in every engine's words, and nothing with a vague label", () => {
+    expect(isTeamToolRequest("mcp__agents__start_thread", "start_thread")).toBe(true);
+    expect(isTeamToolRequest("tool", "mcp__agents__coordinate_bots")).toBe(true);
+    expect(isTeamToolRequest("start_thread", "Allow the agents MCP server to run tool \"start_thread\"?")).toBe(true);
+    for (const [tool, summary] of [["Bash", "rm -rf x"], ["Write", "winter.txt"], ["edit", "write winter.txt"], ["shell", "ls"], ["tool", "tool"], ["other", "escalate to workspace-write"], ["WebFetch", "https://x"], ["permissions", "more access"]]) {
+      expect(isTeamToolRequest(tool!, summary!), `${tool}: ${summary}`).toBe(false);
+    }
+  });
+
+  it("fences the chief's main conversation and the ones the person opened, never one a bot or a routine opened", () => {
+    const chief = { chiefOfStaff: true, threadId: "main" };
+    expect(isChiefRouterThread(chief, "main", undefined, false)).toBe(true);
+    expect(isChiefRouterThread(chief, "mine", { }, false)).toBe(true);
+    expect(isChiefRouterThread(chief, "worker", { openedBy: { botId: "chief" } }, false), "a thread it handed a job to").toBe(false);
+    expect(isChiefRouterThread(chief, "brief", { routineRunId: "r1" }, false)).toBe(false);
+    expect(isChiefRouterThread(chief, "main", undefined, true), "a routine running in its main thread").toBe(false);
+    expect(isChiefRouterThread(chief, "room-thread", undefined, false), "a room, which is no task of its own").toBe(false);
+    expect(isChiefRouterThread({ chiefOfStaff: false, threadId: "main" }, "main", undefined, false)).toBe(false);
+    expect(isChiefRouterThread(undefined, "main", undefined, false)).toBe(false);
+  });
+
+  function fence(router = true) {
+    const answers: Array<{ threadId: string; requestId: string; decision: unknown }> = [], said: string[] = [], released: string[] = [];
+    const adapter = {
+      respondToRequest: async (threadId: string, requestId: string, decision: unknown) => { answers.push({ threadId, requestId, decision }); return "rejected" as const; },
+      interruptTurn: async () => {},
+    };
+    const chiefFence = createChiefFence({ router: () => router, adapter: () => adapter, stale: () => false, release: (threadId) => { released.push(threadId); } });
+    const ask = (tool: string, requestType: "permission" | "question" = "permission") => chiefFence.answers(
+      { type: "request.opened", threadId: "main", turnId: "t1", requestId: "q1", requestType, tool, summary: `${tool} something` } as never,
+      { id: "chief", modelSelection: { instanceId: "deepseek" } },
+      (message) => { said.push(message.tool.name); },
+    );
+    return { ask, answers, said, released };
+  }
+
+  it("refuses a hands-on request with a note to hand the job out, and lets everything else go on to the person's own level", async () => {
+    const f = fence();
+    expect(f.ask("write")).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(f.answers).toEqual([{ threadId: "main", requestId: "q1", decision: { behavior: "deny", message: CHIEF_HANDS_OFF } }]);
+    expect(f.said[0]).toContain("Handed out, not done here");
+    expect(f.released).toEqual(["main"]);
+    expect(f.ask("tool"), "a sandbox escalation with a bare label").toBe(true);
+    expect(f.ask("mcp__agents__start_thread")).toBe(false);
+    expect(f.ask("shell", "question"), "a question is the person's to answer").toBe(false);
+    expect(fence(false).ask("Bash"), "outside the person's conversations nothing is refused").toBe(false);
   });
 });

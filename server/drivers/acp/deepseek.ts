@@ -24,7 +24,7 @@
 // stay readable; resolveTurnModel turns them into dsh's wire pair just before
 // the core selects the model.
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
@@ -302,7 +302,9 @@ export const deepseekSupport: AcpSupport = {
     settings: "connections",
   },
 
-  spawnArgs: () => ["--profile", "acp"],
+  // dsh asks no one before writing in its workspace, so a hands-off turn gets its own process with the shell off and a
+  // read-only sandbox; an escalation it then asks for comes to the server, which refuses it.
+  spawnArgs: (_config, turn) => ["--profile", "acp", ...(turn.handsOff ? ["--patch", handsOffPatch()] : [])],
   credentialEnv: ["DEEPSEEK_API_KEY"],
   // Model and reasoning effort are session config options (see header).
   selectModel: { configId: "model" },
@@ -333,5 +335,20 @@ export const deepseekSupport: AcpSupport = {
   // House convention for ACP harnesses: the persona rides in the prompt text.
   buildPromptText: (turn) => (turn.system ? `${turn.system}\n\n${turn.text}` : turn.text),
 };
+
+/** The dsh overlay for a hands-off turn, written once per process to the temp folder (a packaged app has no source tree). */
+export const HANDS_OFF_PATCH = [
+  "- id: sandbox-policy", "  config:", "    mode: read-only", "    workspaceRoot: !!js process.cwd()",
+  "- id: tool-bash", "  disabled: true", "- id: tool-pwsh", "  disabled: true", "- id: tool-jobs", "  disabled: true", "",
+].join("\n");
+let handsOffPatchFile: string | undefined;
+function handsOffPatch(): string {
+  if (!handsOffPatchFile) {
+    const file = join(tmpdir(), `synarch-dsh-hands-off-${process.pid}.yml`);
+    writeFileSync(file, HANDS_OFF_PATCH);
+    handsOffPatchFile = file;
+  }
+  return handsOffPatchFile;
+}
 
 export const DeepSeekAgentDriver = createAcpDriver(deepseekSupport);

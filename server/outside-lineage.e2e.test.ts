@@ -477,7 +477,8 @@ describe("a Team Cloud", () => {
     expect((await team.as(ada, "POST", `/api/bots/${chief.id}/messages`, { text: "person-line-own", threadId: chief.threadId })).status).toBe(202);
     const turn = await turnWith("person-line-own");
     expect(confined(turn)).toBe(false);
-    expect(atFull(turn)).toBe(true);
+    // SYNARCH: a chief's own conversation with the person runs its engine at Ask so its hands stay off; what it hands out runs at Full.
+    expect(atFull(turn)).toBe(false);
     const capability = await team.capability(chief.id, chief.threadId);
     const handed = await internal(chief.id, chief.threadId, "/api/internal/coordinate-bots", { botIds: [mate.id], message: "person-handed-work", reply: "none" }, capability);
     const handedTurn = await turnWith("person-handed-work");

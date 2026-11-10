@@ -152,7 +152,8 @@ it("applies requested Full Access workflows through MCP without duplicate approv
         ] }),
         step("create_bot", { name: "Theo", role: "Totals checker", instructions: "Check fixture totals before each report." }),
       ], { guarded: "full" });
-    expect(created.permissionMode).toBe("bypassPermissions");
+    // SYNARCH: the chief's own conversation runs its engine at Ask so its hands stay off; its team tools still need no card.
+    expect(created.permissionMode).toBe("default");
     for (const entry of created.evidence.filter((item: any) => ["propose_profile", "create_trigger", "skill_manage", "propose_team_setup"].includes(item.step?.tool))) {
       // Triggers never wait on anything: their tool says so in its own words.
       expect(entry.response.result.content[0].text).toContain(entry.step.tool === "create_trigger" ? "Do not ask for confirmation" : "No additional confirmation is needed");

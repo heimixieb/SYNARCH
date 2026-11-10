@@ -12,6 +12,7 @@ import {
   DEEPSEEK_MODELS_DEFAULT_TIMEOUT_MS,
   DEEPSEEK_MODELS_TIMEOUT_ENV,
   DeepSeekAgentDriver,
+  HANDS_OFF_PATCH,
   deepseekPickerId,
   deepseekSupport,
   deepseekWireValue,
@@ -134,6 +135,14 @@ describe("DeepSeek key detection", () => {
 });
 
 describe("DeepSeek ACP support", () => {
+  it("starts a hands-off turn's dsh with the shell off and a read-only sandbox, and any other with neither", () => {
+    const args = deepseekSupport.spawnArgs({ cli: "dsh", fullAuto: false }, { handsOff: true } as never);
+    expect(args.slice(0, 3)).toEqual(["--profile", "acp", "--patch"]);
+    expect(readFileSync(args[3]!, "utf8")).toBe(HANDS_OFF_PATCH);
+    for (const line of ["    mode: read-only", "- id: tool-pwsh", "- id: tool-bash", "- id: tool-jobs"]) expect(HANDS_OFF_PATCH).toContain(line);
+    expect(deepseekSupport.spawnArgs({ cli: "dsh", fullAuto: true }, { handsOff: false } as never)).toEqual(["--profile", "acp"]);
+  });
+
   it("spawns dsh in its ACP profile and selects model + variants over the wire", () => {
     expect(deepseekSupport.driverKind).toBe("deepseekAgent");
     expect(deepseekSupport.displayName).toBe("DeepSeek Harness");

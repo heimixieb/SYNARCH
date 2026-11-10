@@ -602,7 +602,7 @@ import { createInternalThreadRoutes } from "./routes/internal-threads.ts";
 import { createBrowserEvidenceRoutes } from "./routes/browser-evidence.ts";
 import { createSignInCardRoutes } from "./routes/sign-in-cards.ts";
 import { createInternalEscalateRoutes } from "./routes/internal-escalate.ts";
-import { createInternalChiefTeamRoutes } from "./routes/internal-chief-team.ts"; import { createInternalModelRoutes } from "./routes/internal-models.ts"; import { withTrackRecords } from "./model-scorecard.ts"; import { createSynarchChiefRoutes, withModelTags } from "./synarch-chief.ts"; import { createOwnThreads } from "./host/own-threads.ts";
+import { createInternalChiefTeamRoutes } from "./routes/internal-chief-team.ts"; import { createInternalModelRoutes } from "./routes/internal-models.ts"; import { withTrackRecords } from "./model-scorecard.ts"; import { CHIEF_ROUTER_NOTE, createChiefFence, createSynarchChiefRoutes, isChiefRouterThread, withModelTags } from "./synarch-chief.ts"; import { createOwnThreads } from "./host/own-threads.ts";
 import { createRoomHoldRoutes } from "./routes/room-holds.ts";
 import { checkedGroupResponder, createGroupRoutes } from "./routes/groups.ts";
 import { createChannelRoutes } from "./routes/channels.ts";
@@ -3111,7 +3111,7 @@ function peerReviewRequired(bot: BotRecord, threadId: string): boolean {
 
 const delegatedLevel = createDelegatedLevel({ store, node: id => coordinator.node(id), sourceLevel: sourceApprovalMode, turnLevel: approvalModeForTurn,
   driverKind: bot => registry.cliTarget(bot.modelSelection.instanceId)?.driverKind, guestDriven: cloudGuestDriven, handsNoLevel: outsideLineage.handsNoLevel });
-const liveApprovalMode = createLiveApprovalMode({ store, turnLevel: approvalModeForTurn });
+const liveApprovalMode = createLiveApprovalMode({ store, turnLevel: approvalModeForTurn }); const chiefFence = createChiefFence({ router: (botId, threadId) => isChiefRouterThread(store.bot(botId), threadId, store.taskByThread(botId, threadId), Boolean(activeRoutineRunForThread(threadId))), adapter: (instanceId) => registry.get(instanceId)?.adapter, stale: shouldIgnoreProviderEvent, release: (threadId) => watchdog.setWaitingOnHuman(threadId, false) });
 
 function roomTurnApprovalMode(bot: BotRecord, threadId: string, orchestration?: GroupTurnOrchestration): ApprovalMode {
   const handoff = orchestration?.roomHandoffId ? coordinator.node(orchestration.roomHandoffId) : undefined;
@@ -6493,7 +6493,7 @@ bus.subscribe((event: RuntimeEvent) => {
       const permission = event.requestType === "permission" && !event.questions?.length;
       // The provider's own mode already ran; only Full access, an exact saved command or an exact remembered MCP read tool answers here.
       const asker = bot ?? (speaker ? store.bot(speaker.botId) : undefined);
-      if (asker && proactive.fence.answers(event, asker, pushMessage)) break;
+      if (asker && proactive.fence.answers(event, asker, pushMessage)) break; if (asker && chiefFence.answers(event, asker, pushMessage)) break;
       const unattended = permission && asker && event.requestId ? isUnattended(asker.id, event.threadId) : false;
       // No command the owner saved answers for a guest-driven turn.
       const guestDriven = cloudGuestDriven(event.threadId) || botApiThread(event.threadId);
@@ -8445,11 +8445,11 @@ async function beginTurn(
         threadId,
         botId: bot.id,
         startupRecovery,
-        text: withTurnClock(clock, withRecalled(recalled, attachmentsForBox(dispatchContext.turnText, cwd) + shareNote.text + devsReports.note(threadId, Boolean(integrations.agents)))),
+        text: withTurnClock(clock, withRecalled(recalled, attachmentsForBox(dispatchContext.turnText, cwd) + shareNote.text + devsReports.note(threadId, Boolean(integrations.agents)) + (chiefFence.confines(bot.id, threadId) ? CHIEF_ROUTER_NOTE : ""))),
         ...(recalled ? { recalled } : {}),
         images: dispatchContext.images,
-        approvalMode: approvalModeForTurn(bot, commsDepth > 0, threadId),
-        approvalModeNow: () => liveApprovalMode(bot, threadId, commsDepth > 0),
+        approvalMode: chiefFence.confines(bot.id, threadId) ? "ask" : approvalModeForTurn(bot, commsDepth > 0, threadId), ...(chiefFence.confines(bot.id, threadId) ? { handsOff: true } : {}), // SYNARCH: the engine asks, the chief fence refuses its hands-on requests
+        approvalModeNow: () => chiefFence.confines(bot.id, threadId) ? "ask" : liveApprovalMode(bot, threadId, commsDepth > 0),
         toolScope,
         ...(guestConfined ? { guestConfined: true, confinedWhy: botApiThread(threadId) ? serverLine(threadLanguage(threadId), "server.botApi.confinedWhy") : confinedWhy(threadId) } : {}),
         model,

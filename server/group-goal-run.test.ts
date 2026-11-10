@@ -206,11 +206,19 @@ describe("one goal-run loop for a room and a one-on-one chat", () => {
     expect(goal.finished).toEqual([{ status: "failed", detail: "Solo could not complete the coordination step — exit 1." }]);
   });
 
-  it("never takes a reply without a valid marker as done", async () => {
+  it("never takes a reply without a valid marker as done, and asks once more for it before stopping", async () => {
     const goal = goalRun({ solo: true, steps: [settled("All done, trust me.")] });
     await goal.done;
-    expect(goal.calls).toHaveLength(1);
+    expect(goal.calls).toHaveLength(2);
+    expect(JSON.stringify(goal.calls[1])).toContain("had no <openmaus-goal> decision line");
     expect(goal.finished).toEqual([{ status: "blocked", detail: "Solo did not provide a valid next-step decision." }]);
+  });
+
+  it("goes on when the reminded reply carries the decision", async () => {
+    const goal = goalRun({ solo: true, steps: [settled("Handed it out; the result comes back here."), settled(envelope({ status: "completed", detail: "Saved" }))] });
+    await goal.done;
+    expect(goal.calls).toHaveLength(2);
+    expect(goal.finished[0]?.status).toBe("completed");
   });
 
   it("blocks a room of one that repeats the same next step", async () => {

@@ -233,6 +233,7 @@ export async function runGoalRun<Bot extends GoalRunMember>(deps: GoalRunDeps<Bo
   let coordinatorNote: string | undefined;
   let waitExhaustions = 0;
   let refutes = 0;
+  let missedDecisions = 0;
   while (!deps.cancelled() && run.turnCount < run.maxTurns) {
     const coordinatorTurn = run.turnCount + 1;
     const note = coordinatorNote;
@@ -277,9 +278,15 @@ export async function runGoalRun<Bot extends GoalRunMember>(deps: GoalRunDeps<Bo
 
     const { decision, visibleText } = parseGroupGoalDecision(coordinatorResult.replyText);
     if (!decision) {
-      deps.finish("blocked", `${coordinator.name} did not provide a valid next-step decision.`);
-      return;
+      // A one-on-one lead (the chief, SYNARCH) often ends a turn that only handed work out without the private line: ask once more.
+      if (!deps.solo || ++missedDecisions > 1) {
+        deps.finish("blocked", `${coordinator.name} did not provide a valid next-step decision.`);
+        return;
+      }
+      coordinatorNote = `Your last reply had no ${GROUP_GOAL_CONTROL_OPEN} decision line. End this reply with one: if you handed work out and its result is not back yet, continue with yourself as next and the step "review the result when it arrives".`;
+      continue;
     }
+    missedDecisions = 0;
     if (decision.status === "completed" && deps.verify) {
       deps.progress("Independent check of the result is running.");
       const check = await deps.verify([visibleText, decision.detail].filter(Boolean).join("\n\n"));
