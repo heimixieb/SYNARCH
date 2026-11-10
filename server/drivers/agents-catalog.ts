@@ -318,11 +318,35 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: "list_models",
-    description: "The ids start_thread's model_selection takes, a short list per engine; current is yours. more counts what search finds. unusable says why not; unavailable engines can't run now. track gives a listed model's list price and its record on this team over 30 days (turns, failures, typical time and cost a turn). Copy ids exactly.",
+    description: "The ids start_thread's model_selection takes, a short list per engine; current is yours. more counts what search finds. unusable says why not; unavailable engines can't run now. track gives a listed model's list price and its record on this team over 30 days (turns, failures, typical time and cost a turn). tags says what the person or you found a model good or bad at. Copy ids exactly.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
       properties: { search: { type: "string", maxLength: 200, description: "Words to match instead of the short list." } },
+    },
+  },
+  {
+    name: "tag_model",
+    description: "Save what a model is good or bad at, so list_models shows it as tags. Use the person's words when they tell you; add what a job clearly showed. Replaces that model's tags; empty text removes them.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        instanceId: { type: "string", minLength: 1, description: "Exactly as list_models gives it." },
+        model: { type: "string", minLength: 1, description: "Exactly as list_models gives it." },
+        tags: { type: "string", maxLength: 200, description: "Short and specific, for example \"code, long documents; weak at Chinese writing\". Keep the existing tags you still agree with." },
+      },
+      required: ["instanceId", "model", "tags"],
+    },
+  },
+  {
+    name: "start_goal",
+    description: "Turn the person's request in this conversation into a goal: you keep working on it turn after turn, handing parts to teammates or other models, until another model checks it is done. Use it when the person asks for work to be done; not for questions, chat or a quick answer.",
+    inputSchema: {
+      type: "object",
+      additionalProperties: false,
+      properties: { goal: { type: "string", minLength: 1, maxLength: 4000, description: "The whole job and what done looks like, in the person's own words." } },
+      required: ["goal"],
     },
   },
   {
@@ -897,6 +921,7 @@ export const SHARED_COMPUTER_TOOL_NAMES = new Set(["list_shared_computers", "sha
 const VOICE_TOOL_NAMES = new Set(["send_voice_note"]);
 const CHIEF_ONLY_TOOL_NAMES = new Set([
   "create_bot", "list_team_setup", "list_team_library", "propose_team_setup", "propose_bot_deletion", "manage_room", "retry_thread",
+  "tag_model", "start_goal",
 ]);
 const CHIEF_TARGET_TOOL_NAMES = new Set(["propose_profile", "propose_model"]);
 const WATCHER_TOOL_NAMES = new Set(["create_options_card"]);

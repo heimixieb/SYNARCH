@@ -380,7 +380,7 @@
     },
     {
       "name": "list_models",
-      "description": "The ids start_thread's model_selection takes, a short list per engine; current is yours. more counts what search finds. unusable says why not; unavailable engines can't run now. track gives a listed model's list price and its record on this team over 30 days (turns, failures, typical time and cost a turn). Copy ids exactly.",
+      "description": "The ids start_thread's model_selection takes, a short list per engine; current is yours. more counts what search finds. unusable says why not; unavailable engines can't run now. track gives a listed model's list price and its record on this team over 30 days (turns, failures, typical time and cost a turn). tags says what the person or you found a model good or bad at. Copy ids exactly.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -396,6 +396,50 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": false
+      }
+    },
+    {
+      "name": "tag_model",
+      "description": "Save what a model is good or bad at, so list_models shows it as tags. Use the person's words when they tell you; add what a job clearly showed. Replaces that model's tags; empty text removes them.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "instanceId": {
+            "type": "string",
+            "description": "Exactly as list_models gives it."
+          },
+          "model": {
+            "type": "string",
+            "description": "Exactly as list_models gives it."
+          },
+          "tags": {
+            "type": "string",
+            "description": "Short and specific, for example \"code, long documents; weak at Chinese writing\". Keep the existing tags you still agree with."
+          }
+        },
+        "required": [
+          "instanceId",
+          "model",
+          "tags"
+        ]
+      }
+    },
+    {
+      "name": "start_goal",
+      "description": "Turn the person's request in this conversation into a goal: you keep working on it turn after turn, handing parts to teammates or other models, until another model checks it is done. Use it when the person asks for work to be done; not for questions, chat or a quick answer.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "goal": {
+            "type": "string",
+            "description": "The whole job and what done looks like, in the person's own words."
+          }
+        },
+        "required": [
+          "goal"
+        ]
       }
     },
     {

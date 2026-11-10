@@ -962,6 +962,8 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
     if (!r.ok) return { text: String(r.body.error ?? `mcp_server failed (HTTP ${r.status}).`), isError: true };
     return { text: String(r.body.text ?? "") };
   }
+  const synarchPath = name === "tag_model" ? "/api/internal/model-tags" : name === "start_goal" ? "/api/internal/goals" : "";
+  if (synarchPath) { const r = await apiResponse(synarchPath, { method: "POST", body: JSON.stringify(args) }); return r.ok ? { text: String(r.body.text ?? "") } : { text: String(r.body.error ?? `${name} failed (HTTP ${r.status}).`), isError: true }; }
   return { text: `Unknown tool: ${name}`, isError: true };
 }
 

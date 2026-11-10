@@ -74,7 +74,7 @@ function profiles(): Record<string, Record<string, string>> {
 
 const PROFILES = profiles();
 /** Refused by the server to every bot that is not a Chief of Staff. */
-const CHIEF_ONLY_TOOLS = ["create_bot", "list_team_setup", "propose_team_setup", "propose_bot_deletion", "manage_room", "retry_thread"];
+const CHIEF_ONLY_TOOLS = ["create_bot", "list_team_setup", "propose_team_setup", "propose_bot_deletion", "manage_room", "retry_thread", "tag_model", "start_goal"];
 /** The profile that mounts the most: its bridged list is checked in whole. */
 const FULL = "skills+shared+voice+escalations+x+team+images";
 
@@ -108,7 +108,7 @@ const BUDGET_BASELINE: Record<string, number> = {
   "default+mausbot": 17538,
   "skills+shared+voice+mausbot": 18480,
   "default+no-computer-pick": 16274,
-  "default+room": 16213,
+  "default+room": 16551,
   "non-chief+room": 16096,
   "skills+shared+voice+escalations+x+team+images": 18429,
   "default+images": 17502,

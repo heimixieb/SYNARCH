@@ -602,7 +602,7 @@ import { createInternalThreadRoutes } from "./routes/internal-threads.ts";
 import { createBrowserEvidenceRoutes } from "./routes/browser-evidence.ts";
 import { createSignInCardRoutes } from "./routes/sign-in-cards.ts";
 import { createInternalEscalateRoutes } from "./routes/internal-escalate.ts";
-import { createInternalChiefTeamRoutes } from "./routes/internal-chief-team.ts"; import { createInternalModelRoutes } from "./routes/internal-models.ts"; import { withTrackRecords } from "./model-scorecard.ts"; import { createOwnThreads } from "./host/own-threads.ts";
+import { createInternalChiefTeamRoutes } from "./routes/internal-chief-team.ts"; import { createInternalModelRoutes } from "./routes/internal-models.ts"; import { withTrackRecords } from "./model-scorecard.ts"; import { createSynarchChiefRoutes, withModelTags } from "./synarch-chief.ts"; import { createOwnThreads } from "./host/own-threads.ts";
 import { createRoomHoldRoutes } from "./routes/room-holds.ts";
 import { checkedGroupResponder, createGroupRoutes } from "./routes/groups.ts";
 import { createChannelRoutes } from "./routes/channels.ts";
@@ -13519,7 +13519,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         return json(res, 201, proposed);
       }
       if (await dispatchRoutes([createInternalChiefTeamRoutes({ bot: () => store.bot(internalCapability.botId), requireActive: requireActiveInternalCapability,
-        teams: teamSetupTeams, bots: () => store.bots, instances: () => registry.describe() }), createInternalModelRoutes({ requireActive: requireActiveInternalCapability, menu: (search) => withTrackRecords(ownThreads.menu(internalCapability.botId, internalCapability.threadId, search), DATA_DIR) })], { req, res, url, path, method, auth, json, readBody })) return;
+        teams: teamSetupTeams, bots: () => store.bots, instances: () => registry.describe() }), createInternalModelRoutes({ requireActive: requireActiveInternalCapability, menu: (search) => withModelTags(withTrackRecords(ownThreads.menu(internalCapability.botId, internalCapability.threadId, search), DATA_DIR), DATA_DIR) }), createSynarchChiefRoutes({ dataDir: DATA_DIR, requireActive: requireActiveInternalCapability, isChief: () => Boolean(store.bot(internalCapability.botId)?.chiefOfStaff), goalRefusal: () => turnOrigin(internalCapability).kind !== "user" ? "Only the person's own request in this conversation can start a goal." : connectorThread(internalCapability.botId, internalCapability.threadId)?.group ? "A room runs its goals from the room's own Goal button." : activeRoutineRunForThread(internalCapability.threadId) ? "A routine run cannot start a goal." : null, startGoal: (goal) => { oneOnOneGoals.start(internalCapability.botId, internalCapability.threadId, goal); }, modelRefusal: (instanceId, model) => { const bot = store.bot(internalCapability.botId); return bot ? ownThreads.refusal({ instanceId, model }, bot) : "This bot no longer exists."; } })], { req, res, url, path, method, auth, json, readBody })) return;
       if (method === "POST" && path === "/api/internal/team-setup-requests") {
         const parsed = z.object({ fromBotId: z.string().optional(), fromThreadId: z.string().optional(), plan: z.unknown() }).strict().safeParse(await readInternalBody());
         if (!parsed.success) return json(res, 400, { error: "Invalid team setup request" });
