@@ -701,6 +701,17 @@ describe("the Bot settings page", () => {
     expect(patch).toHaveBeenLastCalledWith({ alwaysAllow: ["mcp__linear__list_issues"] });
   });
 
+  it("lets a chief of staff choose the departments it also looks after, all of them included, after Before it acts", () => {
+    expect(settingsPage(makeBot()).html).not.toContain('data-panel-row="managed-teams"');
+    fixture.storeState = { ...fixture.storeState, bots: [], groups: [], sections: ["Research"] };
+    const rendered = settingsPage(makeBot({ chiefOfStaff: true }));
+    const html = rendered.html;
+    expect(html.indexOf('data-panel-row="managed-teams"')).toBeGreaterThan(html.indexOf('data-panel-row="approval"'));
+    expect(html.indexOf('data-panel-row="managed-teams"')).toBeLessThan(html.indexOf('data-panel-row="backups"'));
+    expect(html).toContain("Every department, including new ones");
+    expect(html).toContain(">Research<");
+  });
+
   it("chooses the reply style from two pills, the hint in each one's tooltip", () => {
     const style = segment(settingsPage(makeBot()), "data-reply-style");
     expect(style.options.map((option) => [option.value, option.label])).toEqual([["default", "Default"], ["conversational", "Conversational"]]);

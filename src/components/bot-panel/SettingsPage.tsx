@@ -18,6 +18,7 @@ import { useDesktopCapabilities } from "../DesktopCapabilities";
 import { DefaultBotHideRow } from "../DefaultBotControls";
 import { SoulField } from "../SoulField";
 import { BotApiCard } from "../bot-settings/BotApiCard";
+import { ManagedTeamsSettings } from "../bot-settings/ManagedTeamsSettings";
 import { PackageProvenance } from "../bot-settings/PackageProvenance";
 import { REPLY_STYLE_LABELS } from "../bot-settings/ReplyStyleField";
 import { useChoosesVisibility, visibilityLabel } from "../bot-settings/VisibilitySection";
@@ -190,6 +191,18 @@ export function SettingsPage({ bot, derived, onOpen, editingInstructions = false
           )}
         </ColRow>
       </Card>
+
+      {bot.chiefOfStaff && <Card anchor="managed-teams">
+        <ColRow data-panel-row="managed-teams">
+          <ManagedTeamsSettings
+            key={bot.id + JSON.stringify(bot.managedSections ?? [])} className=""
+            name={name} ownTeam={bot.section?.trim() || ""}
+            teams={["", ...(state.sections ?? []), ...[...state.bots, ...state.groups].map(member => member.section?.trim() || "")]}
+            allowed={bot.managedSections ?? []}
+            onSave={managedSections => patch({ managedSections, acknowledgePeerScope: true })}
+          />
+        </ColRow>
+      </Card>}
 
       <BackupAis bot={bot} onChange={(fallback) => patch({ fallback })} />
 
