@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { PASS } from "./routes/table.ts";
-import { CHIEF_HANDS_OFF, createChiefFence, createSynarchChiefRoutes, createSynarchSettingsRoutes, isChiefRouterThread, isTeamToolRequest, ownJobFolders, readJobKinds, readModelTags, readSynarchSettings, setJobKind, setModelTags, withModelTags } from "./synarch-chief.ts";
+import { CHIEF_HANDS_OFF, CHIEF_JOB_NOTE, chiefJobMessage, chiefWorkerModel, createChiefFence, createSynarchChiefRoutes, createSynarchSettingsRoutes, isChiefRouterThread, isTeamToolRequest, ownJobFolders, readJobKinds, readModelTags, readSynarchSettings, setJobKind, setModelTags, withModelTags } from "./synarch-chief.ts";
 
 const dirs: string[] = [];
 const dataDir = () => {
@@ -130,6 +130,34 @@ describe("stages and settings", () => {
     expect(await call("/api/synarch/model-tags", "POST", { instanceId: "deepseek", model: "flash", tags: "cheap drafts" })).toMatchObject({ status: 200 });
     expect(await call("/api/synarch/settings", "GET")).toMatchObject({ status: 200, value: { checkGoals: false, tags: { "deepseek/flash": "cheap drafts" } } });
     expect(await call("/api/synarch/other", "GET")).toBe(PASS);
+    expect(await call("/api/synarch/settings", "POST", { workerModel: { instanceId: "deepseek", model: "flash" } })).toMatchObject({ status: 200, value: { checkGoals: false, workerModel: { instanceId: "deepseek", model: "flash" } } });
+    expect(await call("/api/synarch/settings", "POST", { checkGoals: true })).toMatchObject({ value: { checkGoals: true, workerModel: { model: "flash" } } });
+    expect(await call("/api/synarch/settings", "POST", { workerModel: { model: "flash" } })).toMatchObject({ status: 400 });
+    expect(await call("/api/synarch/settings", "POST", {})).toMatchObject({ status: 400 });
+    expect(await call("/api/synarch/settings", "POST", { workerModel: null })).toMatchObject({ status: 200, value: { checkGoals: true } });
+    expect(readSynarchSettings(dir)).toEqual({ checkGoals: true });
+  });
+
+  it("runs a chief's own job on the person's default worker model only when the chief named none", async () => {
+    const dir = dataDir();
+    const route = createSynarchSettingsRoutes({ dataDir: dir });
+    await route({ req: {} as never, res: {} as never, url: new URL("http://x/api/synarch/settings"), path: "/api/synarch/settings", method: "POST", auth: {} as never,
+      json: (() => {}) as never, readBody: (async () => ({ workerModel: { instanceId: "ds", model: "flash" } })) as never });
+    const chief = { chiefOfStaff: true };
+    expect(chiefWorkerModel(dir, chief, undefined, true)).toEqual({ instanceId: "ds", model: "flash" });
+    expect(chiefWorkerModel(dir, chief, { instanceId: "ds", model: "pro" }, true)).toEqual({ instanceId: "ds", model: "pro" });
+    expect(chiefWorkerModel(dir, chief, undefined, false), "a teammate's thread runs its own model").toBeUndefined();
+    expect(chiefWorkerModel(dir, { chiefOfStaff: false }, undefined, true)).toBeUndefined();
+    expect(chiefWorkerModel(dataDir(), chief, undefined, true), "no default set").toBeUndefined();
+  });
+
+  it("hands a job the person's own words and how to report, once", () => {
+    const job = chiefJobMessage("Write the poem's second stanza.", "写一首冬天的诗，两段");
+    expect(job).toContain("Write the poem's second stanza.");
+    expect(job).toContain("写一首冬天的诗，两段");
+    expect(job.endsWith(CHIEF_JOB_NOTE)).toBe(true);
+    expect(chiefJobMessage("Do this: 写一首诗", "写一首诗").match(/写一首诗/g)).toHaveLength(1);
+    expect(chiefJobMessage("Brief", undefined)).toBe(`Brief\n\n${CHIEF_JOB_NOTE}`);
   });
 });
 

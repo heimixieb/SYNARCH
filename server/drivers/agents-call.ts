@@ -471,12 +471,13 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
       body.modelSelection = { instanceId: fields.instanceId.trim(), model: fields.model.trim(), ...(typeof fields.effort === "string" ? { effort: fields.effort.trim() } : {}) };
     }
     if (args.report_back === true) body.reportBack = true;
+    if (typeof args.continue_thread === "string" && args.continue_thread.trim()) body.continueThread = args.continue_thread.trim();
     const r = await api("/api/internal/threads", { method: "POST", body: JSON.stringify(body) });
     if (r.error && r.state !== "failed") return { text: `Couldn't open that thread: ${String(r.error)}`, isError: true };
     // The kind is advice for the record: a refusal (not a chief, not its own job) leaves the job as it is.
     if (typeof args.kind === "string" && args.kind.trim() && r.self === true && r.threadId) await api("/api/internal/job-kind", { method: "POST", body: JSON.stringify({ threadId: r.threadId, kind: args.kind }) }).catch(() => {});
     if (r.reportBack === true) {
-      return { text: `Opened thread #${String(r.title ?? title)} on yourself [thread id: ${String(r.threadId ?? "")}]. It starts when this turn ends, and its result comes back to this conversation and resumes you automatically (assignment id: ${String(r.requestId ?? "unknown")}). Mention it to the person as #${String(r.title ?? title)} and finish your turn; do not check or wait for it in this turn.` };
+      return { text: `${body.continueThread ? "Sent the follow-up to your job" : "Opened thread"} #${String(r.title ?? title)} on yourself [thread id: ${String(r.threadId ?? "")}]. It starts when this turn ends, and its result comes back to this conversation and resumes you automatically (assignment id: ${String(r.requestId ?? "unknown")}). Mention it to the person as #${String(r.title ?? title)} and finish your turn; do not check or wait for it in this turn.` };
     }
     const receipt = r.self !== true && Array.isArray(r.receipts) && jsonRecord(r.receipts[0]) ? r.receipts[0] : undefined;
     const threadTitle = String(r.title ?? receipt?.title ?? title);

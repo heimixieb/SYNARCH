@@ -5,7 +5,8 @@ import { modelName, providerName } from "@/lib/simple-model-menu";
 import { api } from "@/state/api";
 import { useStore } from "@/state/store";
 
-type Settings = { checkGoals: boolean; tags: Record<string, string> };
+type ModelRef = { instanceId: string; model: string };
+type Settings = { checkGoals: boolean; workerModel?: ModelRef; tags: Record<string, string> };
 
 /** SYNARCH: the chief's routing switches, and what each model is good at (the same tags the chief saves with tag_model). */
 export function ChiefRoutingSettings({ name }: { name: string }) {
@@ -34,11 +35,11 @@ export function ChiefRoutingSettings({ name }: { name: string }) {
       setError(t("chiefRouting.saveFailed"));
     }
   };
-  const toggleChecks = async (checkGoals: boolean) => {
+  const saveSettings = async (change: { checkGoals?: boolean; workerModel?: ModelRef | null }) => {
     setError("");
     try {
-      const saved = await api<Omit<Settings, "tags">>("/api/synarch/settings", { method: "POST", body: JSON.stringify({ checkGoals }) });
-      setSettings(current => current && { ...current, ...saved });
+      const saved = await api<Omit<Settings, "tags">>("/api/synarch/settings", { method: "POST", body: JSON.stringify(change) });
+      setSettings(current => current && { tags: current.tags, ...saved });
     } catch {
       setError(t("chiefRouting.saveFailed"));
     }
@@ -52,11 +53,23 @@ export function ChiefRoutingSettings({ name }: { name: string }) {
       {settings && <>
         <label className="mt-3 flex items-start gap-2 text-[13px] text-ink">
           <input type="checkbox" className="mt-0.5 accent-accent" checked={settings.checkGoals}
-            onChange={event => void toggleChecks(event.target.checked)} />
+            onChange={event => void saveSettings({ checkGoals: event.target.checked })} />
           <span>
             <span className="font-medium">{t("chiefRouting.checkGoals")}</span>
             <span className="block text-ink-secondary">{t("chiefRouting.checkGoalsHint")}</span>
           </span>
+        </label>
+        <label className="mt-3 flex flex-col gap-1 text-[13px] text-ink">
+          <span className="font-medium">{t("chiefRouting.workerModel")}</span>
+          <span className="text-ink-secondary">{t("chiefRouting.workerModelHint", { name })}</span>
+          <select value={settings.workerModel ? `${settings.workerModel.instanceId}/${settings.workerModel.model}` : ""}
+            onChange={event => { const model = models.find(candidate => candidate.key === event.target.value); void saveSettings({ workerModel: model ? { instanceId: model.instanceId, model: model.model } : null }); }}
+            className="rounded-lg border border-hairline bg-transparent px-2 py-1.5 text-[13px] text-ink">
+            <option value="">{t("chiefRouting.sameAsChief", { name })}</option>
+            {settings.workerModel && !models.some(model => model.key === `${settings.workerModel!.instanceId}/${settings.workerModel!.model}`)
+              && <option value={`${settings.workerModel.instanceId}/${settings.workerModel.model}`}>{`${settings.workerModel.instanceId}/${settings.workerModel.model}`}</option>}
+            {models.map(model => <option key={model.key} value={model.key}>{model.label}</option>)}
+          </select>
         </label>
         <div className="mt-3 flex flex-col gap-2 border-t border-hairline/40 pt-3">
           <select aria-label={t("chiefRouting.model")} value={picked}

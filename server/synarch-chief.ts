@@ -63,16 +63,36 @@ function writeJson(file: string, value: unknown): void {
   renameSync(`${file}.tmp`, file);
 }
 
-/** The person's SYNARCH switches. Independent checks of a finished goal are on unless turned off. */
-export interface SynarchSettings { checkGoals: boolean }
+/** The person's SYNARCH switches. Independent checks of a finished goal are on unless turned off; workerModel is the model a
+ * chief's job runs on when the chief names none (else the chief's own, usually the dearest). */
+export interface SynarchSettings { checkGoals: boolean; workerModel?: { instanceId: string; model: string } }
 const settingsFile = (dataDir: string) => join(dataDir, "synarch-settings.json");
+const modelRef = (value: unknown): SynarchSettings["workerModel"] => {
+  const raw = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const instanceId = text(raw.instanceId).trim(), model = text(raw.model).trim();
+  return instanceId && model ? { instanceId, model } : undefined;
+};
 export function readSynarchSettings(dataDir: string): SynarchSettings {
-  return { checkGoals: readJson(settingsFile(dataDir)).checkGoals !== false };
+  const raw = readJson(settingsFile(dataDir)), workerModel = modelRef(raw.workerModel);
+  return { checkGoals: raw.checkGoals !== false, ...(workerModel ? { workerModel } : {}) };
 }
-export function setSynarchSettings(dataDir: string, patch: Partial<SynarchSettings>): SynarchSettings {
-  const next = { ...readSynarchSettings(dataDir), ...patch };
-  writeJson(settingsFile(dataDir), next);
-  return next;
+
+/** The model a chief's own job runs on when it named none: the person's default worker model, if set. */
+export function chiefWorkerModel(dataDir: string, bot: { chiefOfStaff?: boolean }, requested: unknown, onSelf: boolean): unknown {
+  return requested !== undefined || !onSelf || !bot.chiefOfStaff ? requested : readSynarchSettings(dataDir).workerModel;
+}
+
+export const PERSON_WORDS_MAX_CHARS = 4_000;
+/** How a job a chief hands out reports back (DeepSeek's worker: quiet, honest, one question). */
+export const CHIEF_JOB_NOTE = "[Work quietly: no progress updates. End with exactly one of: done, with what you made and where; "
+  + "an unfinished draft, with what is left; failed, with why. If only the person can decide something, end with one concrete question for them.]";
+/** A job a chief hands out from the person's conversation: its brief, the person's own words (DeepSeek's Router forwards
+ * the request itself, never only its rewrite, so the worker reads what was actually asked) and how to report. */
+export function chiefJobMessage(message: string, personWords: string | undefined): string {
+  const words = personWords?.trim();
+  const asked = !words || message.includes(words) ? ""
+    : `\n\n[What the person asked, in their own words; the instructions above are the chief's, for this part of it:]\n${words.slice(0, PERSON_WORDS_MAX_CHARS)}`;
+  return `${message}${asked}\n\n${CHIEF_JOB_NOTE}`;
 }
 
 // What kind of work each job the chief handed out was, so a model's record can be read per kind.
@@ -106,8 +126,15 @@ export function createSynarchSettingsRoutes(deps: { dataDir: string }): RouteHan
     }
     if (path === "/api/synarch/settings" && method === "POST") {
       const body = await readBody(req, 8_000);
-      if (typeof body.checkGoals !== "boolean") return json(res, 400, { error: "checkGoals must be true or false." });
-      return json(res, 200, setSynarchSettings(deps.dataDir, { checkGoals: body.checkGoals }));
+      const workerModel = body.workerModel === null ? null : modelRef(body.workerModel);
+      if (body.checkGoals !== undefined && typeof body.checkGoals !== "boolean") return json(res, 400, { error: "checkGoals must be true or false." });
+      if (body.workerModel !== undefined && workerModel === undefined) return json(res, 400, { error: "workerModel needs instanceId and model, or null." });
+      if (body.checkGoals === undefined && body.workerModel === undefined) return json(res, 400, { error: "Nothing to change." });
+      const { workerModel: _old, ...kept } = readSynarchSettings(deps.dataDir);
+      const next = { ...kept, ...(typeof body.checkGoals === "boolean" ? { checkGoals: body.checkGoals } : {}),
+        ...(workerModel ? { workerModel } : workerModel === null ? {} : _old ? { workerModel: _old } : {}) };
+      writeJson(settingsFile(deps.dataDir), next);
+      return json(res, 200, next);
     }
     if (path === "/api/synarch/model-tags" && method === "POST") {
       const body = await readBody(req, 8_000);

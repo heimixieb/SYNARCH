@@ -602,7 +602,7 @@ import { createInternalThreadRoutes } from "./routes/internal-threads.ts";
 import { createBrowserEvidenceRoutes } from "./routes/browser-evidence.ts";
 import { createSignInCardRoutes } from "./routes/sign-in-cards.ts";
 import { createInternalEscalateRoutes } from "./routes/internal-escalate.ts";
-import { createInternalChiefTeamRoutes } from "./routes/internal-chief-team.ts"; import { createInternalModelRoutes } from "./routes/internal-models.ts"; import { withTrackRecords } from "./model-scorecard.ts"; import { CHIEF_ROUTER_NOTE, createChiefFence, createSynarchChiefRoutes, createSynarchSettingsRoutes, isChiefRouterThread, ownJobFolders, readSynarchSettings, withModelTags } from "./synarch-chief.ts"; import { createOwnThreads } from "./host/own-threads.ts";
+import { createInternalChiefTeamRoutes } from "./routes/internal-chief-team.ts"; import { createInternalModelRoutes } from "./routes/internal-models.ts"; import { withTrackRecords } from "./model-scorecard.ts"; import { CHIEF_ROUTER_NOTE, chiefWorkerModel, createChiefFence, createSynarchChiefRoutes, createSynarchSettingsRoutes, isChiefRouterThread, ownJobFolders, readSynarchSettings, withModelTags, chiefJobMessage } from "./synarch-chief.ts"; import { createOwnThreads } from "./host/own-threads.ts";
 import { createRoomHoldRoutes } from "./routes/room-holds.ts";
 import { checkedGroupResponder, createGroupRoutes } from "./routes/groups.ts";
 import { createChannelRoutes } from "./routes/channels.ts";
@@ -14156,11 +14156,11 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           projectId = project.id;
         }
         const sourceTitle = owner.group ? owner.group.name : (store.taskByThread(from.id, fromThreadId)?.title ?? "");
-        const picked = body.modelSelection === undefined ? null : checkedModelSelection(body.modelSelection, undefined, true); const refused = !picked ? null : target.id !== from.id ? "model_selection is only for threads on yourself" : !picked.ok ? picked.error : ownThreads.refusal(picked.selection, from); if (refused) return json(res, 400, { error: refused });
+        const asked = chiefWorkerModel(DATA_DIR, from, body.modelSelection, target.id === from.id), continueThread = typeof body.continueThread === "string" ? body.continueThread.trim() : "", relayed = chiefFence.confines(from.id, fromThreadId) ? chiefJobMessage(message, store.activePath(fromThreadId).findLast((line) => line.role === "user" && line.kind === "text")?.text) : message; let picked = asked === undefined ? null : checkedModelSelection(asked, undefined, true); const refused = !picked ? null : target.id !== from.id ? "model_selection is only for threads on yourself" : !picked.ok ? picked.error : ownThreads.refusal(picked.selection, from); if (refused && body.modelSelection === undefined) picked = null; else if (refused) return json(res, 400, { error: refused }); if (continueThread && (target.id !== from.id || body.reportBack !== true)) return json(res, 400, { error: "continue_thread works only for your own job, with report_back true." });
         if (target.id === from.id) { const selfRefused = selfThreadRefusal({ handoff: Boolean(internalCapability.roomHandoffId), requestLine: store.activePath(fromThreadId).findLast((line) => line.role === "user" && line.kind === "text") }); if (selfRefused) return json(res, 409, { error: selfRefused });
           const inherited = picked?.ok ? { modelSelection: picked.selection, approvalMode: undefined } : ownThreads.inherited(from.id, fromThreadId);
           if (body.reportBack === true) { if (owner.group) return json(res, 400, { error: "report_back works only from your own conversation, not a room. Leave it out; the thread's result then stays in that thread." });
-            const result = await coordinateBots({ botIds: [from.id], message, rework: false, thread: "new", reply: "resume", consult: false, title, projectId, ownThread: inherited }), receipt = (result.body.receipts as PeerDeliveryReceipt[] | undefined)?.[0];
+            const result = await coordinateBots({ botIds: [from.id], message: relayed, rework: false, thread: continueThread || "new", reply: "resume", consult: false, title, projectId, ownThread: inherited }), receipt = (result.body.receipts as PeerDeliveryReceipt[] | undefined)?.[0];
             return json(res, result.status === 200 ? 201 : result.status, { ...result.body, self: true, reportBack: true, title, botId: from.id, botName: from.name, threadId: receipt?.threadId, requestId: receipt?.requestId }); }
           const task = store.createTask(from.id, title, false, projectId, { botId: from.id, name: from.name, at: Date.now() }, inherited.approvalMode, inherited.modelSelection);
           if (!task) return json(res, 500, { error: "couldn't create that thread" });
@@ -14175,7 +14175,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
           if (owner.group) chip.from = { botId: from.id, name: from.name, color: from.color };
           store.appendMessage(fromThreadId, chip);
           // Mark the bot's own words, so a later turn never mistakes the request for the person's.
-          const opening = `[Thread you opened yourself${sourceTitle ? ` from #${sourceTitle}` : ""}. The request below is your own words, not the person's: do the work here and end with a clear result they can read.]\n\n${message}`;
+          const opening = `[Thread you opened yourself${sourceTitle ? ` from #${sourceTitle}` : ""}. The request below is your own words, not the person's: do the work here and end with a clear result they can read.]\n\n${relayed}`;
           const outcome = await startOrQueueOpenedThread(from.id, task.threadId, opening, isUnattended(from.id, fromThreadId), withPerson(turnOrigin(internalCapability), actingPeople.requester(internalCapability.threadId, internalCapability.generation)));
           return json(res, 201, {
             threadId: task.threadId,
@@ -14187,7 +14187,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
             ...outcome,
           });
         }
-        const result = await coordinateBots({ botIds: [target.id], message, rework: false, thread: "new", reply: "resume", consult: false, title, projectId });
+        const result = await coordinateBots({ botIds: [target.id], message: relayed, rework: false, thread: "new", reply: "resume", consult: false, title, projectId });
         return json(res, result.status, result.body);
       }
       if (method === "POST" && path === "/api/internal/create-bot") {

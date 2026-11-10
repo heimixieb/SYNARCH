@@ -109,7 +109,7 @@ const BUDGET_BASELINE: Record<string, number> = {
   "skills+shared+voice+escalations+x+team": 72853,
   "default+no-computer-pick": 60850,
   "default+room": 59206,
-  "non-chief+room": 48379,
+  "non-chief+room": 49391,
   "skills+shared+voice+escalations+x+team+images": 73626,
   "default+images": 62835,
 };

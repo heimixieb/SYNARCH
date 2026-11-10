@@ -365,7 +365,7 @@
               "instanceId",
               "model"
             ],
-            "description": "Optional: ids (and effort) exactly as list_models gives them. Default: this conversation's model."
+            "description": "Optional: ids (and effort) exactly as list_models gives them. Default: the person's default worker model when a chief set one, else this conversation's model."
           },
           "report_back": {
             "type": "boolean",
@@ -374,6 +374,10 @@
           "kind": {
             "type": "string",
             "description": "Optional, chief only: the kind of work in a word or two (writing, code, research, review, translation…), so list_models shows each model's record per kind. Reuse the same words."
+          },
+          "continue_thread": {
+            "type": "string",
+            "description": "Optional: the thread id of a job you opened, to send this follow-up to that same job (it keeps its history, model and files) instead of opening a new one. Needs report_back true; title is then ignored."
           }
         },
         "required": [

@@ -41455,7 +41455,10 @@
       "chiefRouting.saved": "99443c236636eecbc017afec739c269db70d6a45c2e6637da426940b2ded00b1",
       "chiefRouting.none": "837694e85ae56ddee3e280333eb9c0e34cfaa4a63144fea4e7d78107c17b8931",
       "chiefRouting.loadFailed": "70fd242aec6700809b0ff2d97af938a1487bc9ecbe8b4d6430827a5f609a2bfc",
-      "chiefRouting.saveFailed": "680c88ccf5d4c9fe60c44c3a541c39e5aa80c9d6e76377c886e7c00a1421dc0d"
+      "chiefRouting.saveFailed": "680c88ccf5d4c9fe60c44c3a541c39e5aa80c9d6e76377c886e7c00a1421dc0d",
+      "chiefRouting.workerModel": "742d1a05c4761a2920e54ee0500cd98b541ab29fb821fe0a6e650bc93a72dcb8",
+      "chiefRouting.workerModelHint": "52cd45ec4f907caaa7d8bd670d685f4efa953821b16ba4a7d91e3428689abae4",
+      "chiefRouting.sameAsChief": "cee772e3a2eb998fbf5d289682fef8beb2934bdee1ea60cb42a44b95581ff8bf"
     },
     "zh-tw": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",
