@@ -18,6 +18,7 @@ import { useDesktopCapabilities } from "../DesktopCapabilities";
 import { DefaultBotHideRow } from "../DefaultBotControls";
 import { SoulField } from "../SoulField";
 import { BotApiCard } from "../bot-settings/BotApiCard";
+import { ChiefRoutingSettings } from "../bot-settings/ChiefRoutingSettings";
 import { ManagedTeamsSettings } from "../bot-settings/ManagedTeamsSettings";
 import { PackageProvenance } from "../bot-settings/PackageProvenance";
 import { REPLY_STYLE_LABELS } from "../bot-settings/ReplyStyleField";
@@ -202,6 +203,10 @@ export function SettingsPage({ bot, derived, onOpen, editingInstructions = false
             onSave={managedSections => patch({ managedSections, acknowledgePeerScope: true })}
           />
         </ColRow>
+      </Card>}
+
+      {bot.chiefOfStaff && <Card anchor="chief-routing">
+        <ColRow data-panel-row="chief-routing"><ChiefRoutingSettings name={name} /></ColRow>
       </Card>}
 
       <BackupAis bot={bot} onChange={(fallback) => patch({ fallback })} />

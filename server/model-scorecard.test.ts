@@ -23,6 +23,16 @@ describe("modelRecords", () => {
     expect(records.get("ds/flash")).toEqual({ turns: 3, failed: 1, seconds: 12, usdPerTurn: 0.003 });
     expect(records.get("ds/pro")).toEqual({ turns: 1, failed: 0, seconds: 40, usdPerTurn: null });
   });
+
+  it("also counts each kind of work the chief named, and says the busiest kinds first", () => {
+    const jobs = new Map([["w1", "writing"], ["w2", "code"]]);
+    const records = modelRecords([
+      { ...row("flash", "ok", 10, null), threadId: "w1" }, { ...row("flash", "ok", 10, null), threadId: "w1" },
+      { ...row("flash", "error", 10, null), threadId: "w2" }, row("flash", "ok", 10, null),
+    ], jobs);
+    expect(records.get("ds/flash")?.kinds).toEqual({ writing: { turns: 2, failed: 0 }, code: { turns: 1, failed: 1 } });
+    expect(recordLine("unknown-model", records.get("ds/flash"))).toBe("4 turns here in 30 days, 1 failed, ~10s a turn, by kind: writing 2 turns 0 failed; code 1 turns 1 failed");
+  });
 });
 
 describe("recordLine", () => {

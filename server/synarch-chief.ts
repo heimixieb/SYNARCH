@@ -48,6 +48,77 @@ export function withModelTags<T extends object>(menu: T | null, dataDir: string)
 
 const text = (value: unknown) => (typeof value === "string" ? value : "");
 
+function readJson(file: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeJson(file: string, value: unknown): void {
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(`${file}.tmp`, JSON.stringify(value, null, 2));
+  renameSync(`${file}.tmp`, file);
+}
+
+/** The person's SYNARCH switches. Independent checks of a finished goal are on unless turned off. */
+export interface SynarchSettings { checkGoals: boolean }
+const settingsFile = (dataDir: string) => join(dataDir, "synarch-settings.json");
+export function readSynarchSettings(dataDir: string): SynarchSettings {
+  return { checkGoals: readJson(settingsFile(dataDir)).checkGoals !== false };
+}
+export function setSynarchSettings(dataDir: string, patch: Partial<SynarchSettings>): SynarchSettings {
+  const next = { ...readSynarchSettings(dataDir), ...patch };
+  writeJson(settingsFile(dataDir), next);
+  return next;
+}
+
+// What kind of work each job the chief handed out was, so a model's record can be read per kind.
+export const JOB_KIND_MAX_CHARS = 30;
+const JOB_KINDS_KEPT = 5_000;
+const jobKindsFile = (dataDir: string) => join(dataDir, "job-kinds.json");
+export const cleanJobKind = (value: string) => value.replace(/\s+/g, " ").trim().toLowerCase().slice(0, JOB_KIND_MAX_CHARS);
+export function readJobKinds(dataDir: string): Map<string, string> {
+  return new Map(Object.entries(readJson(jobKindsFile(dataDir))).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1] !== ""));
+}
+export function setJobKind(dataDir: string, threadId: string, kind: string): void {
+  const kinds = readJobKinds(dataDir);
+  kinds.delete(threadId);
+  kinds.set(threadId, cleanJobKind(kind));
+  // Oldest first in the file, so the oldest go when it is full.
+  writeJson(jobKindsFile(dataDir), Object.fromEntries([...kinds].slice(-JOB_KINDS_KEPT)));
+}
+
+/** The folders of jobs a chief opened on itself without a folder of their own, so it can attach what its workers made. */
+export function ownJobFolders(bot: { id: string; chiefOfStaff?: boolean; cwd?: string } | null | undefined,
+  tasks: readonly { threadId: string; cwd?: string | null; openedBy?: { botId?: string } }[], taskWorkspacesDir: string): string[] {
+  if (!bot?.chiefOfStaff || bot.cwd) return [];
+  return tasks.filter((task) => task.openedBy?.botId === bot.id && task.cwd == null).map((task) => join(taskWorkspacesDir, bot.id, task.threadId));
+}
+
+/** The person's own settings page: switches and model tags. New routes are admin-only by default (request-auth.ts). */
+export function createSynarchSettingsRoutes(deps: { dataDir: string }): RouteHandler {
+  return async ({ req, res, path, method, json, readBody }) => {
+    if (path === "/api/synarch/settings" && method === "GET") {
+      return json(res, 200, { ...readSynarchSettings(deps.dataDir), tags: readModelTags(deps.dataDir) });
+    }
+    if (path === "/api/synarch/settings" && method === "POST") {
+      const body = await readBody(req, 8_000);
+      if (typeof body.checkGoals !== "boolean") return json(res, 400, { error: "checkGoals must be true or false." });
+      return json(res, 200, setSynarchSettings(deps.dataDir, { checkGoals: body.checkGoals }));
+    }
+    if (path === "/api/synarch/model-tags" && method === "POST") {
+      const body = await readBody(req, 8_000);
+      const instanceId = text(body.instanceId).trim(), model = text(body.model).trim();
+      if (!instanceId || !model || typeof body.tags !== "string") return json(res, 400, { error: "instanceId, model and tags are required." });
+      return json(res, 200, { tags: setModelTags(deps.dataDir, instanceId, model, body.tags) });
+    }
+    return PASS;
+  };
+}
+
 export function createSynarchChiefRoutes(deps: {
   dataDir: string;
   requireActive(): void;
@@ -58,12 +129,21 @@ export function createSynarchChiefRoutes(deps: {
   startGoal(goal: string): void;
   /** The model the calling bot may run, or why not, exactly as start_thread would judge it. */
   modelRefusal(instanceId: string, model: string): string | null;
+  /** The thread is one of the calling bot's own. */
+  ownsThread(threadId: string): boolean;
 }): RouteHandler {
   return async ({ req, res, path, method, json, readBody }) => {
-    if (method !== "POST" || (path !== "/api/internal/model-tags" && path !== "/api/internal/goals")) return PASS;
+    if (method !== "POST" || (path !== "/api/internal/model-tags" && path !== "/api/internal/goals" && path !== "/api/internal/job-kind")) return PASS;
     deps.requireActive();
     if (!deps.isChief()) return json(res, 403, { error: "Only a chief of staff can do this." });
     const body = await readBody(req, 64_000);
+    if (path === "/api/internal/job-kind") {
+      const threadId = text(body.threadId).trim(), kind = cleanJobKind(text(body.kind));
+      if (!threadId || !kind) return json(res, 400, { error: "threadId and kind are required." });
+      if (!deps.ownsThread(threadId)) return json(res, 404, { error: "No such job of yours." });
+      setJobKind(deps.dataDir, threadId, kind);
+      return json(res, 200, { kind });
+    }
     if (path === "/api/internal/model-tags") {
       const instanceId = text(body.instanceId).trim(), model = text(body.model).trim(), tags = text(body.tags);
       if (!instanceId || !model) return json(res, 400, { error: "instanceId and model are required, exactly as list_models gives them." });
@@ -104,8 +184,8 @@ export const CHIEF_HANDS_OFF = "Refused: you are the chief, so you plan, hand ou
 export const CHIEF_ROUTER_NOTE = "\n\n[In this conversation your own file and command tools are off: any write, edit or command is refused, and "
   + "asking the person to approve it will not help. To get a file made or a command run, hand it out: start_thread with "
   + "model_selection (pick by list_models tags and record) and report_back true, or coordinate_bots to a teammate. "
-  + "Never give the worker your folder's path: it cannot write there. Have it save in its own folder and attach the file "
-  + "with attach_file, then tell the person where it is.]";
+  + "Never ask a worker to write in your folder: it cannot. It saves in its own folder and reports the absolute paths; "
+  + "the next worker can read them there, and you attach the ones the person wants with attach_file and those paths.]";
 
 type ChiefBot = { chiefOfStaff?: boolean; threadId: string };
 type ChiefTask = { openedBy?: unknown; routineRunId?: string } | null | undefined;

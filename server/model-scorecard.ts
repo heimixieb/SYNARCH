@@ -1,6 +1,7 @@
 // Each model's recent record on this team, for a Chief choosing who does a job: read from the usage ledger, so nothing new
-// is booked. shortcut: one record per model across all kinds of work; split by the bot (its specialty) if routing needs it.
+// is booked. Jobs the chief gave a kind (start_thread kind, synarch-chief.ts) are also counted per kind.
 import { listPriceFor } from "./model-prices.ts";
+import { readJobKinds } from "./synarch-chief.ts";
 import type { ModelMenu } from "./routes/internal-models.ts";
 import { readUsage, type UsageRow } from "./usage-ledger.ts";
 
@@ -16,19 +17,27 @@ export interface ModelRecord {
   seconds: number | null;
   /** Average cost of a priced turn. */
   usdPerTurn: number | null;
+  /** Turns and failures per kind of work, for the jobs that had one. */
+  kinds?: Record<string, { turns: number; failed: number }>;
 }
 
 export const recordKey = (instanceId: string, model: string): string => `${instanceId}/${model}`;
 
-export function modelRecords(rows: readonly UsageRow[]): Map<string, ModelRecord> {
-  const tallies = new Map<string, { turns: number; failed: number; seconds: number[]; usd: number[] }>();
+export function modelRecords(rows: readonly UsageRow[], jobKinds: ReadonlyMap<string, string> = new Map()): Map<string, ModelRecord> {
+  const tallies = new Map<string, { turns: number; failed: number; seconds: number[]; usd: number[]; kinds: Record<string, { turns: number; failed: number }> }>();
   for (const row of rows) {
     const status = row.outcome?.status;
     if (status !== "ok" && status !== "error") continue;
     const key = recordKey(row.instanceId, row.model);
-    const tally = tallies.get(key) ?? { turns: 0, failed: 0, seconds: [], usd: [] };
+    const tally = tallies.get(key) ?? { turns: 0, failed: 0, seconds: [], usd: [], kinds: {} };
     tally.turns += 1;
     if (status === "error") tally.failed += 1;
+    const kind = jobKinds.get(row.threadId);
+    if (kind) {
+      const perKind = tally.kinds[kind] ??= { turns: 0, failed: 0 };
+      perKind.turns += 1;
+      if (status === "error") perKind.failed += 1;
+    }
     const took = row.startedAt && row.endedAt ? (Date.parse(row.endedAt) - Date.parse(row.startedAt)) / 1000 : NaN;
     if (Number.isFinite(took) && took >= 0) tally.seconds.push(took);
     if (typeof row.costUsd === "number" && Number.isFinite(row.costUsd)) tally.usd.push(row.costUsd);
@@ -42,10 +51,13 @@ export function modelRecords(rows: readonly UsageRow[]): Map<string, ModelRecord
       failed: tally.failed,
       seconds: sorted.length ? Math.round(sorted[Math.floor(sorted.length / 2)]!) : null,
       usdPerTurn: tally.usd.length ? tally.usd.reduce((sum, usd) => sum + usd, 0) / tally.usd.length : null,
+      ...(Object.keys(tally.kinds).length ? { kinds: tally.kinds } : {}),
     });
   }
   return records;
 }
+
+const KINDS_SHOWN = 5;
 
 const usd = (value: number): string => `$${value < 0.01 ? value.toPrecision(1) : value.toFixed(2)}`;
 
@@ -60,6 +72,8 @@ export function recordLine(model: string, record: ModelRecord | undefined, at = 
       ...(record.usdPerTurn !== null ? [`~${usd(record.usdPerTurn)} a turn`] : []),
     ] : []),
   ];
+  const kinds = Object.entries(record?.kinds ?? {}).sort((a, b) => b[1].turns - a[1].turns).slice(0, KINDS_SHOWN);
+  if (kinds.length) parts.push(`by kind: ${kinds.map(([kind, tally]) => `${kind} ${tally.turns} turns ${tally.failed} failed`).join("; ")}`);
   return parts.length ? parts.join(", ") : null;
 }
 
@@ -70,7 +84,7 @@ function recentRecords(dataDir: string, now: Date): Map<string, ModelRecord> {
   if (cached && now.getTime() - cached.at < CACHE_MS) return cached.records;
   let records = new Map<string, ModelRecord>();
   try {
-    records = modelRecords(readUsage(dataDir, { from: new Date(now.getTime() - WINDOW_DAYS * DAY_MS), to: now }));
+    records = modelRecords(readUsage(dataDir, { from: new Date(now.getTime() - WINDOW_DAYS * DAY_MS), to: now }), readJobKinds(dataDir));
   } catch {
     // The record is advice; a ledger that cannot be read leaves the menu as it was.
   }

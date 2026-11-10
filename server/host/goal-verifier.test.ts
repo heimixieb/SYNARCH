@@ -50,7 +50,7 @@ describe("goalTranscript", () => {
 
 describe("createGoalVerifier", () => {
   /** A check whose model answers each turn with the next reply; returns the verdict and the prompts it was sent. */
-  async function check(replies: string[]) {
+  async function check(replies: string[], off = false) {
     const turns = createGoalTurns({ retireProviderTurn: () => {} });
     const prompts: string[] = [];
     const verify = createGoalVerifier({
@@ -69,6 +69,7 @@ describe("createGoalVerifier", () => {
       isUnattended: () => true,
       verifierModel: () => ({ instanceId: "ds", model: "pro" }),
       modelName: () => "Pro",
+      off: () => off,
     });
     return { verdict: await verify({ bot: { id: "b", name: "B" } as never, threadId: "goal", goal: "write a.txt", report: "done" }), prompts };
   }
@@ -85,5 +86,11 @@ describe("createGoalVerifier", () => {
     const silent = await check(["looks fine", "still fine"]);
     expect(silent.verdict).toEqual({ verdict: "unverifiable", reason: "the check gave no verdict", by: "Pro" });
     expect(silent.prompts).toHaveLength(2);
+  });
+
+  it("opens no check when the person turned checks off", async () => {
+    const skipped = await check([line({ verdict: "refute", reason: "never asked" })], true);
+    expect(skipped.verdict.verdict).toBe("pass");
+    expect(skipped.prompts).toEqual([]);
   });
 });

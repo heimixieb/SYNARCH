@@ -602,7 +602,7 @@ import { createInternalThreadRoutes } from "./routes/internal-threads.ts";
 import { createBrowserEvidenceRoutes } from "./routes/browser-evidence.ts";
 import { createSignInCardRoutes } from "./routes/sign-in-cards.ts";
 import { createInternalEscalateRoutes } from "./routes/internal-escalate.ts";
-import { createInternalChiefTeamRoutes } from "./routes/internal-chief-team.ts"; import { createInternalModelRoutes } from "./routes/internal-models.ts"; import { withTrackRecords } from "./model-scorecard.ts"; import { CHIEF_ROUTER_NOTE, createChiefFence, createSynarchChiefRoutes, isChiefRouterThread, withModelTags } from "./synarch-chief.ts"; import { createOwnThreads } from "./host/own-threads.ts";
+import { createInternalChiefTeamRoutes } from "./routes/internal-chief-team.ts"; import { createInternalModelRoutes } from "./routes/internal-models.ts"; import { withTrackRecords } from "./model-scorecard.ts"; import { CHIEF_ROUTER_NOTE, createChiefFence, createSynarchChiefRoutes, createSynarchSettingsRoutes, isChiefRouterThread, ownJobFolders, readSynarchSettings, withModelTags } from "./synarch-chief.ts"; import { createOwnThreads } from "./host/own-threads.ts";
 import { createRoomHoldRoutes } from "./routes/room-holds.ts";
 import { checkedGroupResponder, createGroupRoutes } from "./routes/groups.ts";
 import { createChannelRoutes } from "./routes/channels.ts";
@@ -3569,7 +3569,7 @@ function activeGroupSpeaker(groupId: string): { botId: string; name: string; col
 
 const goalTurns = createGoalTurns({ retireProviderTurn });
 const goalCards = createGoalCards({ store, routines: () => routines, notify, routineSourceOwner, routineSourceThread });
-const goalVerifier = createGoalVerifier({ store, turns: goalTurns, startTurn, isUnattended, modelName, verifierModel: (bot, threadId) => pickVerifierModel(ownThreads.menu(bot.id, threadId, undefined) ?? { current: bot.modelSelection, engines: [] }, (id) => registry.cliTarget(id)?.driverKind) });
+const goalVerifier = createGoalVerifier({ store, turns: goalTurns, startTurn, isUnattended, modelName, off: () => !readSynarchSettings(DATA_DIR).checkGoals, verifierModel: (bot, threadId) => pickVerifierModel(ownThreads.menu(bot.id, threadId, undefined) ?? { current: bot.modelSelection, engines: [] }, (id) => registry.cliTarget(id)?.driverKind) });
 const oneOnOneGoals = createOneOnOneGoals({
   store, cards: goalCards, turns: goalTurns, canStart: (botId, threadId) => canAdmitDirectTurn(botId, threadId) && !threadsAwaitingTeammates().has(threadId), startTurn, isUnattended, verify: goalVerifier,
 });
@@ -12105,7 +12105,7 @@ let restartRequested = false;
 const cloudMoveRoutes = createCloudMoveRoutes();
 
 // `workspaceAccess` is assigned at boot, after this line: read it per request.
-ROUTES.push(createHostedSlackRoutes({ bot: (id) => store.bot(id), hostedReady: () => Boolean(workspaceAccess) && entitled("admin") })); ROUTES.push(createStopLineRoutes());
+ROUTES.push(createHostedSlackRoutes({ bot: (id) => store.bot(id), hostedReady: () => Boolean(workspaceAccess) && entitled("admin") })); ROUTES.push(createStopLineRoutes(), createSynarchSettingsRoutes({ dataDir: DATA_DIR }));
 const orgInstallStatuses = () => orgLibrary?.installStatuses() ?? new Map();
 ROUTES.push(createBotPresetRoutes({ presets: presetStore, orgStatuses: orgInstallStatuses })); ROUTES.push(createWorkspaceBannerRoutes({ changed: () => broadcast({ kind: "config", ...configStatus() }) })); ROUTES.push(createStarterAwakeRoutes({ awake: starterAwake }));
 ROUTES.push(createSharedComputerRoutes({ enabled: (auth) => lendingEnabled() || (ownerLends() && ownHome.owner(auth)), computers: sharedComputers, sessionLive: (id) => sessions.isLive(id), environmentId: ENVIRONMENT_ID,
@@ -13265,7 +13265,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
                 path: requestedPath,
                 name: requestedName,
                 // The attachment store is not a source: only the bot's own files are.
-                roots: messageFileRootsForThread(from.id, threadId).filter((root) => root !== ATTACHMENTS_DIR),
+                roots: [...messageFileRootsForThread(from.id, threadId).filter((root) => root !== ATTACHMENTS_DIR), ...ownJobFolders(store.bot(from.id), store.tasks(from.id), TASK_WORKSPACES_DIR)],
                 ...(vm ? { guest: { root: VM_WORKSPACE_GUEST, host: vm.workspaceDir } } : {}),
                 // Saved outside those folders this turn, never from the data dir, which holds every bot's memory and the app's state.
                 ...(internalCapability.deliversSavedFiles && internalCapability.turnStartedAt !== undefined
@@ -13519,7 +13519,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
         return json(res, 201, proposed);
       }
       if (await dispatchRoutes([createInternalChiefTeamRoutes({ bot: () => store.bot(internalCapability.botId), requireActive: requireActiveInternalCapability,
-        teams: teamSetupTeams, bots: () => store.bots, instances: () => registry.describe() }), createInternalModelRoutes({ requireActive: requireActiveInternalCapability, menu: (search) => withModelTags(withTrackRecords(ownThreads.menu(internalCapability.botId, internalCapability.threadId, search), DATA_DIR), DATA_DIR) }), createSynarchChiefRoutes({ dataDir: DATA_DIR, requireActive: requireActiveInternalCapability, isChief: () => Boolean(store.bot(internalCapability.botId)?.chiefOfStaff), goalRefusal: () => turnOrigin(internalCapability).kind !== "user" ? "Only the person's own request in this conversation can start a goal." : connectorThread(internalCapability.botId, internalCapability.threadId)?.group ? "A room runs its goals from the room's own Goal button." : activeRoutineRunForThread(internalCapability.threadId) ? "A routine run cannot start a goal." : null, startGoal: (goal) => { oneOnOneGoals.start(internalCapability.botId, internalCapability.threadId, goal); }, modelRefusal: (instanceId, model) => { const bot = store.bot(internalCapability.botId); return bot ? ownThreads.refusal({ instanceId, model }, bot) : "This bot no longer exists."; } })], { req, res, url, path, method, auth, json, readBody })) return;
+        teams: teamSetupTeams, bots: () => store.bots, instances: () => registry.describe() }), createInternalModelRoutes({ requireActive: requireActiveInternalCapability, menu: (search) => withModelTags(withTrackRecords(ownThreads.menu(internalCapability.botId, internalCapability.threadId, search), DATA_DIR), DATA_DIR) }), createSynarchChiefRoutes({ dataDir: DATA_DIR, requireActive: requireActiveInternalCapability, isChief: () => Boolean(store.bot(internalCapability.botId)?.chiefOfStaff), goalRefusal: () => turnOrigin(internalCapability).kind !== "user" ? "Only the person's own request in this conversation can start a goal." : connectorThread(internalCapability.botId, internalCapability.threadId)?.group ? "A room runs its goals from the room's own Goal button." : activeRoutineRunForThread(internalCapability.threadId) ? "A routine run cannot start a goal." : null, startGoal: (goal) => { oneOnOneGoals.start(internalCapability.botId, internalCapability.threadId, goal); }, modelRefusal: (instanceId, model) => { const bot = store.bot(internalCapability.botId); return bot ? ownThreads.refusal({ instanceId, model }, bot) : "This bot no longer exists."; }, ownsThread: (id) => Boolean(store.taskByThread(internalCapability.botId, id)) })], { req, res, url, path, method, auth, json, readBody })) return;
       if (method === "POST" && path === "/api/internal/team-setup-requests") {
         const parsed = z.object({ fromBotId: z.string().optional(), fromThreadId: z.string().optional(), plan: z.unknown() }).strict().safeParse(await readInternalBody());
         if (!parsed.success) return json(res, 400, { error: "Invalid team setup request" });

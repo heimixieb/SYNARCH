@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { PASS } from "./routes/table.ts";
-import { CHIEF_HANDS_OFF, createChiefFence, createSynarchChiefRoutes, isChiefRouterThread, isTeamToolRequest, readModelTags, setModelTags, withModelTags } from "./synarch-chief.ts";
+import { CHIEF_HANDS_OFF, createChiefFence, createSynarchChiefRoutes, createSynarchSettingsRoutes, isChiefRouterThread, isTeamToolRequest, ownJobFolders, readJobKinds, readModelTags, readSynarchSettings, setJobKind, setModelTags, withModelTags } from "./synarch-chief.ts";
 
 const dirs: string[] = [];
 const dataDir = () => {
@@ -45,7 +45,7 @@ function harness(overrides: Partial<Parameters<typeof createSynarchChiefRoutes>[
   const started: string[] = [];
   const route = createSynarchChiefRoutes({
     dataDir: dir, requireActive: () => {}, isChief: () => true, goalRefusal: () => null,
-    startGoal: (goal) => { started.push(goal); }, modelRefusal: () => null, ...overrides,
+    startGoal: (goal) => { started.push(goal); }, modelRefusal: () => null, ownsThread: (id) => id.startsWith("own"), ...overrides,
   });
   const call = async (path: string, body: unknown, method = "POST") => {
     let reply: { status: number; value: Record<string, unknown> } | undefined;
@@ -95,6 +95,41 @@ describe("chief routes", () => {
 
     const running = harness({ startGoal: () => { throw new Error("A goal is already running here."); } });
     expect(await running.call("/api/internal/goals", { goal: "again" })).toMatchObject({ status: 409, value: { error: "No goal started: A goal is already running here." } });
+  });
+});
+
+describe("stages and settings", () => {
+  it("records a job's kind only for the chief's own jobs, newest kind wins", async () => {
+    const { call, dir } = harness();
+    expect(await call("/api/internal/job-kind", { threadId: "own-1", kind: "  Writing " })).toMatchObject({ status: 200, value: { kind: "writing" } });
+    expect(await call("/api/internal/job-kind", { threadId: "someone-else", kind: "code" })).toMatchObject({ status: 404 });
+    expect(await call("/api/internal/job-kind", { threadId: "own-2", kind: " " })).toMatchObject({ status: 400 });
+    setJobKind(dir, "own-1", "review");
+    expect([...readJobKinds(dir)]).toEqual([["own-1", "review"]]);
+  });
+
+  it("lets a chief attach from the folders of jobs it opened, nothing else", () => {
+    const tasks = [{ threadId: "w1", openedBy: { botId: "chief" } }, { threadId: "w2", cwd: "/project", openedBy: { botId: "chief" } }, { threadId: "mine" }, { threadId: "x", openedBy: { botId: "other" } }];
+    expect(ownJobFolders({ id: "chief", chiefOfStaff: true }, tasks, "/data/task-workspaces")).toEqual([join("/data/task-workspaces", "chief", "w1")]);
+    expect(ownJobFolders({ id: "chief", chiefOfStaff: false }, tasks, "/data/task-workspaces")).toEqual([]);
+    expect(ownJobFolders({ id: "chief", chiefOfStaff: true, cwd: "/project" }, tasks, "/data/task-workspaces"), "its jobs share its own folder").toEqual([]);
+  });
+
+  it("turns independent checks off and on, and edits tags from the settings page", async () => {
+    const dir = dataDir();
+    const route = createSynarchSettingsRoutes({ dataDir: dir });
+    const call = async (path: string, method: string, body: unknown = {}) => {
+      let reply: { status: number; value: Record<string, unknown> } | undefined;
+      const outcome = await route({ req: {} as never, res: {} as never, url: new URL(`http://x${path}`), path, method, auth: {} as never,
+        json: ((_res: unknown, status: number, value: Record<string, unknown>) => { reply = { status, value }; }) as never, readBody: (async () => body) as never });
+      return outcome === PASS ? PASS : reply!;
+    };
+    expect(readSynarchSettings(dir)).toEqual({ checkGoals: true });
+    expect(await call("/api/synarch/settings", "POST", { checkGoals: "no" })).toMatchObject({ status: 400 });
+    expect(await call("/api/synarch/settings", "POST", { checkGoals: false })).toMatchObject({ status: 200, value: { checkGoals: false } });
+    expect(await call("/api/synarch/model-tags", "POST", { instanceId: "deepseek", model: "flash", tags: "cheap drafts" })).toMatchObject({ status: 200 });
+    expect(await call("/api/synarch/settings", "GET")).toMatchObject({ status: 200, value: { checkGoals: false, tags: { "deepseek/flash": "cheap drafts" } } });
+    expect(await call("/api/synarch/other", "GET")).toBe(PASS);
   });
 });
 

@@ -296,7 +296,7 @@ const TOOL_DEFINITIONS = [
   {
     name: "start_thread",
     description:
-      "Open a separate job on yourself: one conversation with its own history and its own run, shown to the person as a row under you, without switching the person's selected conversation. Use it only when the user requests independent jobs (for example one review per pull request, \"review each pull request\" — one thread per pull request) instead of doing them inside this conversation, or a second opinion from another model (model_selection from list_models, report_back true). The title becomes the row's name, so make it short and specific, and write it as #Title when you mention it to the person; give complete instructions, since the run will not see this conversation. You can open at most five per turn; a self-opened job cannot open more jobs. This is not a teammate handoff: use coordinate_bots for teammates (thread \"new\" opens a fresh thread on them) and their automatic replies. If a call is refused, do not retry it: say what you still wanted opened.",
+      "Open a separate job on yourself: one conversation with its own history and its own run, shown to the person as a row under you, without switching the person's selected conversation. Use it only when the user requests independent jobs (for example one review per pull request, \"review each pull request\" — one thread per pull request) instead of doing them inside this conversation, a second opinion from another model, or a stage of a larger job that another model is better at (model_selection from list_models, report_back true). The title becomes the row's name, so make it short and specific, and write it as #Title when you mention it to the person; give complete instructions, since the run will not see this conversation. You can open at most five per turn; a self-opened job cannot open more jobs. This is not a teammate handoff: use coordinate_bots for teammates (thread \"new\" opens a fresh thread on them) and their automatic replies. If a call is refused, do not retry it: say what you still wanted opened.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -312,6 +312,7 @@ const TOOL_DEFINITIONS = [
           description: "Optional: ids (and effort) exactly as list_models gives them. Default: this conversation's model.",
         },
         report_back: { type: "boolean", description: "True: its result resumes you here; end your turn. Not in a room." },
+        kind: { type: "string", description: "Optional, chief only: the kind of work in a word or two (writing, code, research, review, translation…), so list_models shows each model's record per kind. Reuse the same words." },
       },
       required: ["title", "message"],
     },

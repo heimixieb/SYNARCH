@@ -473,6 +473,8 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
     if (args.report_back === true) body.reportBack = true;
     const r = await api("/api/internal/threads", { method: "POST", body: JSON.stringify(body) });
     if (r.error && r.state !== "failed") return { text: `Couldn't open that thread: ${String(r.error)}`, isError: true };
+    // The kind is advice for the record: a refusal (not a chief, not its own job) leaves the job as it is.
+    if (typeof args.kind === "string" && args.kind.trim() && r.self === true && r.threadId) await api("/api/internal/job-kind", { method: "POST", body: JSON.stringify({ threadId: r.threadId, kind: args.kind }) }).catch(() => {});
     if (r.reportBack === true) {
       return { text: `Opened thread #${String(r.title ?? title)} on yourself [thread id: ${String(r.threadId ?? "")}]. It starts when this turn ends, and its result comes back to this conversation and resumes you automatically (assignment id: ${String(r.requestId ?? "unknown")}). Mention it to the person as #${String(r.title ?? title)} and finish your turn; do not check or wait for it in this turn.` };
     }

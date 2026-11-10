@@ -41,6 +41,8 @@ export interface GoalVerifierDeps {
   /** The model to check with: another vendor's when one can run, else another model, else the bot's own in a fresh thread. */
   verifierModel(bot: BotRecord, threadId: string): ModelSelection;
   modelName(selection: ModelSelection): string;
+  /** The person turned independent checks off: a finished goal counts as done unchecked. */
+  off?(): boolean;
 }
 
 /** Another vendor's model when one can run, else another model on the same engine, else the current one in a fresh thread. */
@@ -112,6 +114,7 @@ export function parseVerdict(text: string): { verdict: GoalVerdict["verdict"]; r
 export function createGoalVerifier(deps: GoalVerifierDeps) {
   const { store } = deps;
   return async function verify(check: GoalCheck): Promise<GoalVerdict> {
+    if (deps.off?.()) return { verdict: "pass", reason: "independent checks are turned off in settings", by: "nobody" };
     const selection = deps.verifierModel(check.bot, check.threadId);
     const by = deps.modelName(selection);
     const unverifiable = (reason: string): GoalVerdict => ({ verdict: "unverifiable", reason, by });
