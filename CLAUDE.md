@@ -29,9 +29,12 @@ Setting up another computer: `docs/synarch/00-new-computer.md`.
   `scripts/control-omb.ts <verb> --url URL`. It seals PATH, so it never sees real engine CLIs.
 - Real DeepSeek: `node --experimental-strip-types scripts/synarch/launch-deepseek.ts` (needs `dsh` and the key file).
   After stopping it, kill the printed pid tree and delete the printed dataDir: it holds a copy of the key.
-- GitHub and npm are slow and drop connections from here. A local proxy runs at `127.0.0.1:7688` (HTTP and SOCKS5;
-  the port may differ on another computer). Route one git command through it without changing config:
-  `GIT_SSH_COMMAND="ssh -o ProxyCommand='connect -S 127.0.0.1:7688 %h %p'" git push`.
+- GitHub and npm are slow and drop connections from here. The person's proxy is always `127.0.0.1:7688` (HTTP and
+  SOCKS5) and has a 100 GB monthly quota: route git push/pull/fetch through it per command without changing config,
+  `GIT_SSH_COMMAND="ssh -o ProxyCommand='connect -S 127.0.0.1:7688 %h %p'" git push`, but never waste it: no repeated
+  big clones or refetches, and npm/pnpm installs go direct (their retries succeed).
+- Work fast: typecheck once per batch of edits, start long test runs in the background and keep working, and do not
+  re-prove the known upstream failures listed below.
 - Git Bash `curl` mangles Chinese request bodies: send them from `python -I` scripts as UTF-8.
 - Goals over HTTP: `POST /api/bots/:id/messages {text, mode: "goal", threadId}`; read `GET /api/threads/:id/messages`.
 - Stopping a fixture through a task stop leaves its `%TEMP%\openmausbot-verify-*` dir: delete only the one it printed.
