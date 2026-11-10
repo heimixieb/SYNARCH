@@ -224,7 +224,7 @@ import { MCP_OAUTH_CALLBACK_PATH, McpOAuthManager } from "./mcp-oauth.ts";
 import {
   GROUP_GOAL_WAIT_MAX_MS,
   groupGoalCompletionTurnId,
-  parseGroupGoalDecision,
+  parseGroupGoalDecision, visibleCoordinatorText,
   runGoalRun,
   selectGroupGoalCoordinator,
   type GoalStepOutcome,
@@ -3571,7 +3571,7 @@ const goalTurns = createGoalTurns({ retireProviderTurn });
 const goalCards = createGoalCards({ store, routines: () => routines, notify, routineSourceOwner, routineSourceThread });
 const goalVerifier = createGoalVerifier({ store, turns: goalTurns, startTurn, isUnattended, modelName, verifierModel: (bot, threadId) => pickVerifierModel(ownThreads.menu(bot.id, threadId, undefined) ?? { current: bot.modelSelection, engines: [] }, (id) => registry.cliTarget(id)?.driverKind) });
 const oneOnOneGoals = createOneOnOneGoals({
-  store, cards: goalCards, turns: goalTurns, canStart: canAdmitDirectTurn, startTurn, isUnattended, verify: goalVerifier,
+  store, cards: goalCards, turns: goalTurns, canStart: (botId, threadId) => canAdmitDirectTurn(botId, threadId) && !threadsAwaitingTeammates().has(threadId), startTurn, isUnattended, verify: goalVerifier,
 });
 
 function groupIsWorking(group: GroupRecord): boolean {
@@ -6434,7 +6434,7 @@ bus.subscribe((event: RuntimeEvent) => {
       break;
     case "item.completed":
       if (event.itemType === "assistant_text") {
-        pushAssistantText(event.text, event.turnId);
+        const shown = event.text.includes("openmaus-goal>") ? visibleCoordinatorText(event.text) : event.text; if (shown) pushAssistantText(shown, event.turnId);
       } else if (event.itemType === "assistant_image") {
         try {
           const decoded = decodeGeneratedImage(event.data);

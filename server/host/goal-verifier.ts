@@ -78,11 +78,20 @@ export function verifierInstructions(check: Pick<GoalCheck, "goal" | "report">, 
     "Check every part the goal asks for. Where the work left files, pages or other outputs you can reach with your tools, open them and check them yourself; do not trust the report's description.",
     "Do not fix, redo or extend the work. Do not ask the person anything.",
     "Write a short verdict for the person in the language of the goal, then end with exactly one private line:",
-    `${GROUP_GOAL_CONTROL_OPEN}{"verdict":"pass","reason":"The evidence you checked"}${GROUP_GOAL_CONTROL_CLOSE}`,
+    VERDICT_LINE,
     'Use "refute" when something the goal requires is missing or wrong, and say exactly what to fix. Use "unverifiable" when you cannot check the claim with what you can reach, or the report contradicts what you see. Use "pass" only with evidence.',
     "Never mention the private line in your text.",
   ].join("\n");
 }
+
+const VERDICT_LINE = `${GROUP_GOAL_CONTROL_OPEN}{"verdict":"pass","reason":"The evidence you checked"}${GROUP_GOAL_CONTROL_CLOSE}`;
+
+/** Sent once when the check's reply had no private line. */
+export const VERDICT_REMINDER = [
+  "Your check ended without the private verdict line. Do not check again; reply with only that line for the verdict you reached:",
+  VERDICT_LINE,
+  'Use "pass", "refute" or "unverifiable", with the reason.',
+].join("\n");
 
 /** The last complete envelope wins; anything else is no verdict. */
 export function parseVerdict(text: string): { verdict: GoalVerdict["verdict"]; reason: string } | null {
@@ -110,31 +119,38 @@ export function createGoalVerifier(deps: GoalVerifierDeps) {
       goalTask?.cwd ?? undefined);
     if (!task) return unverifiable("the check could not open a thread");
     store.appendMessage(task.threadId, { role: "bot", kind: "activity", tool: { name: `Independent check by ${by}: ${check.goal}`.slice(0, 300), ok: true } });
-    let settle!: (outcome: HostTurnResult) => void;
-    const settled = new Promise<HostTurnResult>((resolve) => { settle = resolve; });
-    const lead = deps.turns.begin(task.threadId);
-    let outcome: "settled" | "provider_failed" | "dispatch_failed" | "stalled" = "dispatch_failed";
-    try {
+    // One turn of the check; models sometimes forget the private line, so a missing verdict is asked for once more.
+    const turn = async (text: string): Promise<GoalVerdict | { verdict: null }> => {
+      let settle!: (outcome: HostTurnResult) => void;
+      const settled = new Promise<HostTurnResult>((resolve) => { settle = resolve; });
+      const lead = deps.turns.begin(task.threadId);
+      let outcome: "settled" | "provider_failed" | "dispatch_failed" | "stalled" = "dispatch_failed";
       try {
-        await deps.startTurn(check.bot.id, verifierInstructions(check, goalTranscript(store.messagesFor(check.threadId))), {
-          threadId: task.threadId,
-          cardContinuation: true,
-          // The check acts for nobody: it reads the work and reports.
-          origin: OUTSIDE,
-          unattended: deps.isUnattended(check.bot.id, task.threadId),
-          onSettled: settle,
-        });
-      } catch (error) {
-        return unverifiable(`the check could not start: ${error instanceof Error ? error.message : String(error)}`.slice(0, 300));
+        try {
+          await deps.startTurn(check.bot.id, text, {
+            threadId: task.threadId,
+            cardContinuation: true,
+            // The check acts for nobody: it reads the work and reports.
+            origin: OUTSIDE,
+            unattended: deps.isUnattended(check.bot.id, task.threadId),
+            onSettled: settle,
+          });
+        } catch (error) {
+          return unverifiable(`the check could not start: ${error instanceof Error ? error.message : String(error)}`.slice(0, 300));
+        }
+        const result = await settled;
+        outcome = result.stalled ? "stalled" : result.ok ? "settled" : "provider_failed";
+        if (!result.ok) return unverifiable(`the check did not finish: ${result.text}`.slice(0, 300));
+        const parsed = parseVerdict(lead.assistantItems.join("\n"));
+        return parsed ? { ...parsed, by } : { verdict: null };
+      } finally {
+        deps.turns.end(task.threadId, lead, outcome);
       }
-      const result = await settled;
-      outcome = result.stalled ? "stalled" : result.ok ? "settled" : "provider_failed";
-      if (!result.ok) return unverifiable(`the check did not finish: ${result.text}`.slice(0, 300));
-      const parsed = parseVerdict(lead.assistantItems.join("\n"));
-      return parsed ? { ...parsed, by } : unverifiable("the check gave no verdict");
-    } finally {
-      deps.turns.end(task.threadId, lead, outcome);
-    }
+    };
+    const first = await turn(verifierInstructions(check, goalTranscript(store.messagesFor(check.threadId))));
+    if (first.verdict) return first;
+    const again = await turn(VERDICT_REMINDER);
+    return again.verdict ? again : unverifiable("the check gave no verdict");
   };
 }
 
