@@ -17,6 +17,7 @@ const dataDir = mkdtempSync(join(tmpdir(), "omb-deepseek-"));
 mkdirSync(join(dataDir, "tmp"), { recursive: true });
 writeFileSync(join(dataDir, "config.json"), JSON.stringify({
   features: { smartSetupChoices: false },
+  defaultModelSelection: { instanceId: "deepseek", model: "deepseek-official/deepseek-flash" },
   deepseek: { key },
   instances: { deepseek: { driver: "deepseekAgent", displayName: "DeepSeek", config: { cli: join(npmBin, process.platform === "win32" ? "dsh.cmd" : "dsh") } } },
 }, null, 2), { mode: 0o600 });

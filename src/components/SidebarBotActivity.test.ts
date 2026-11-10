@@ -76,6 +76,19 @@ describe("cross-bot attention", () => {
     expect(entries.map((entry) => attentionOwnerName(entry))).toEqual(["Alpha", "Beta", "Alpha"]);
   });
 
+  it("lists a failed thread right after the ones waiting on the person, and drops the mark while it runs again", () => {
+    const alpha = bot("a", "Alpha", "a0", [
+      task("a0", "Building site", { busy: true, activity: "working" }),
+      task("a1", "Broken export", { failedAt: 5 }),
+      task("a2", "Waiting approval", { activity: "waiting-on-you" }),
+      task("a3", "Retrying", { failedAt: 5, busy: true, activity: "working" }),
+    ]);
+    const entries = crossBotAttentionThreads([alpha], {});
+    expect(entries.map((entry) => entry.task.threadId)).toEqual(["a2", "a1", "a0", "a3"]);
+    expect(attentionRowStatus(entries[1]!.task).label).toBe(t("task.failed"));
+    expect(attentionRowStatus(entries[3]!.task).label).toBe(t("chat.activity.working"));
+  });
+
   it("excludes the bot the picker belongs to and keeps queued threads", () => {
     const alpha = bot("a", "Alpha", "a0", [task("a0", "Waiting approval", { activity: "waiting-on-you" })]);
     const beta = bot("b", "Beta", "b0", [task("b0", "Queued job", {})]);

@@ -2993,6 +2993,7 @@
   "thread.goneShowing": "这个对话已不存在。改为显示 {name}。",
   "thread.botGone": "这个机器人已不在这里了。",
   "task.unread": "未读",
+  "task.failed": "失败",
   "task.updated.justNow": "刚刚",
   "task.updated.minutes": "{count} 分钟前",
   "task.updated.hours": "{count} 小时前",

@@ -46,12 +46,13 @@ describe("list_threads for a Chief of Staff", () => {
   const person = [
     { ...task("t-ops-unread", "Invoice check"), unread: true },
     task("t-ops-idle", "Old chat"),
+    { ...task("t-ops-failed", "Broken export"), failedAt: 9 },
     { ...task("t-ops-private", "Mine alone"), unread: true, private: true },
   ] as TaskRecord[];
 
-  it("shows the person's own conversations on its team that run or are unread, and nothing idle or private", async () => {
+  it("shows the person's own conversations on its team that run, failed or are unread, and nothing idle or private", async () => {
     const rows = (await listThreads(chief, person)).filter((thread) => thread.person === true);
-    expect(rows.map((thread) => [thread.threadId, thread.state])).toEqual([["t-ops-busy", "running"], ["t-ops-unread", "idle"]]);
+    expect(rows.map((thread) => [thread.threadId, thread.state])).toEqual([["t-ops-busy", "running"], ["t-ops-unread", "idle"], ["t-ops-failed", "failed"]]);
   });
 
   it("keeps the person's conversations from a bot that is not a Chief", async () => {

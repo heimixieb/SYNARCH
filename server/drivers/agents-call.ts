@@ -435,7 +435,7 @@ export async function callTool(called: string, input: Json, context: ToolCallCon
     if (r.error) return { text: `Couldn't list threads: ${String(r.error)}`, isError: true };
     const threads = Array.isArray(r.threads) ? r.threads.filter(jsonRecord) : [];
     if (!threads.length) return { text: "No threads yet: you have none of your own beyond this one, and you have not opened any on a teammate." };
-    const stateWord: Record<string, string> = { running: "running", "waiting-on-you": "waiting on the person", queued: "queued", idle: "idle" };
+    const stateWord: Record<string, string> = { running: "running", "waiting-on-you": "waiting on the person", queued: "queued", failed: "failed: its last turn ended in an error", idle: "idle" };
     const lines = threads.map((thread) => {
       const where = thread.own === true ? "yours" : `on @${String(thread.botName)}${thread.person === true ? ", the person's own conversation" : typeof thread.openedBy === "string" && thread.openedBy ? `, opened by @${thread.openedBy}` : ""}`;
       const state = stateWord[String(thread.state)] ?? String(thread.state);

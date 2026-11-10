@@ -137,6 +137,8 @@ export interface BotMovedTo {
 export interface WireTask extends InboxTask {
   /** Outstanding handoffs, not an active provider turn. */
   waitingForTeammates?: boolean;
+  /** Epoch ms of the failed turn this conversation last ended on; cleared by its next text message. Server-owned. */
+  failedAt?: number;
   threadId: string;
   title: string;
   createdAt: number;

@@ -3193,6 +3193,7 @@
   "thread.goneShowing": "That thread is no longer here. Showing {name} instead.",
   "thread.botGone": "That bot is no longer here.",
   "task.unread": "Unread",
+  "task.failed": "Failed",
   "task.updated.justNow": "just now",
   "task.updated.minutes": "{count} min ago",
   "task.updated.hours": "{count} h ago",

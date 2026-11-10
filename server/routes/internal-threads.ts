@@ -6,7 +6,7 @@ import type { BotRecord, Store, TaskRecord } from "../store.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 import { conversationLanguage, serverLine } from "../server-lines.ts";
 
-type ThreadState = "running" | "waiting-on-you" | "queued" | "idle" | "closed";
+type ThreadState = "running" | "waiting-on-you" | "queued" | "failed" | "idle" | "closed";
 
 interface ThreadRow {
   threadId: string; botId: string; botName: string; title: string;
@@ -49,6 +49,7 @@ export function createInternalThreadRoutes(deps: {
         if (deps.queuedThreadPosition(bot.id, task.threadId) !== null) return "queued" as const;
         if (coordinator.activeDirect(task.threadId)) return "queued" as const;
         if (task.closedBy) return "closed" as const;
+        if (task.failedAt !== undefined) return "failed" as const;
         return "idle" as const;
       };
       // A queued handoff says why it waits and which handoff it is, so a bot can tell the person and match a report.

@@ -1,10 +1,10 @@
-import { BellDot, CircleAlert, Clock3, Loader2, Pin, PinOff, type LucideIcon } from "lucide-react";
+import { BellDot, CircleAlert, CircleX, Clock3, Loader2, Pin, PinOff, type LucideIcon } from "lucide-react";
 import type { Dispatch } from "react";
 import type { Action, AppState, Bot, Group, Task } from "@/state/store";
 import { cn } from "@/lib/cn";
 import { roomThreadSpeakerId, roomThreadWorking } from "@/lib/room-threads";
 import { t } from "@/lib/i18n";
-import { isArchived, orderedSidebarThreads, orderedThreadList, threadRecency, threadUpdatedLabel } from "./SidebarThreadRow";
+import { isArchived, isFailed, orderedSidebarThreads, orderedThreadList, threadRecency, threadUpdatedLabel } from "./SidebarThreadRow";
 import type { SidebarDensity } from "@/lib/sidebar-preferences";
 import { localizedTaskTitle } from "@/lib/task-title";
 
@@ -17,7 +17,7 @@ export function sidebarBotActivityTasks(bot: Bot, queued: Record<string, unknown
   return tasks.map((task) => ({ ...task, queued: Boolean(queued[task.threadId]?.length) }))
     .filter((task) => !task.routineRunId)
     .filter((task) => !isArchived(task) || (archivedApprovals && task.activity === "waiting-on-you"))
-    .filter((task) => task.activity === "waiting-on-you" || task.activity === "working" || task.busy || task.waitingForTeammates === true || task.queued || task.unread);
+    .filter((task) => task.activity === "waiting-on-you" || isFailed(task) || task.activity === "working" || task.busy || task.waitingForTeammates === true || task.queued || task.unread);
 }
 
 /** A routine run's thread stays out of the thread tree, but gets an activity row while it runs, so the person can open it and watch. */
@@ -50,7 +50,7 @@ export function threadsWhenTreeHidden(bot: Bot, queued: Record<string, unknown[]
  * it asks them something, or has a reply they have not read. A teammate's thread that ended on a card for them
  * reaches the app only as unread, so unread is the signal. */
 export function threadsWaitingOnPerson(bot: Bot, queued: Record<string, unknown[]>) {
-  return orderedThreadList(sidebarBotActivityTasks(bot, queued).filter((task) => task.activity === "waiting-on-you" || task.unread));
+  return orderedThreadList(sidebarBotActivityTasks(bot, queued).filter((task) => task.activity === "waiting-on-you" || isFailed(task) || task.unread));
 }
 
 /** Must derive each thread's state exactly as GroupThreadList's sidebar rows do. */
@@ -104,12 +104,13 @@ export function attentionHasRunningWork(entries: readonly AttentionThread[]): bo
 
 export function attentionRowStatus(task: AttentionThread["task"]): { active: boolean; Icon: LucideIcon; colorClass: string; label: string } {
   const waiting = task.activity === "waiting-on-you";
+  const failed = isFailed(task);
   const teammateWait = !waiting && task.waitingForTeammates === true;
   const working = !waiting && !teammateWait && (task.busy || task.activity === "working");
-  const active = waiting || teammateWait || working || task.queued || task.unread === true;
-  const label = waiting ? t("task.waiting") : working ? t("chat.activity.working") : teammateWait ? t("task.waitingOnTeammate") : task.queued ? t("task.queued") : t("task.unread");
-  const Icon = waiting ? CircleAlert : working ? Loader2 : teammateWait || task.queued ? Clock3 : BellDot;
-  const colorClass = cn(working && "animate-spin text-success", (waiting || teammateWait) && "text-warning");
+  const active = waiting || failed || teammateWait || working || task.queued || task.unread === true;
+  const label = waiting ? t("task.waiting") : failed ? t("task.failed") : working ? t("chat.activity.working") : teammateWait ? t("task.waitingOnTeammate") : task.queued ? t("task.queued") : t("task.unread");
+  const Icon = waiting ? CircleAlert : failed ? CircleX : working ? Loader2 : teammateWait || task.queued ? Clock3 : BellDot;
+  const colorClass = cn(working && "animate-spin text-success", (waiting || teammateWait) && "text-warning", failed && "text-danger");
   return { active, Icon, colorClass, label };
 }
 
@@ -214,16 +215,17 @@ export function SidebarBotActivity({ bot, rowThreadId, density, pendingQueued, d
   return <div data-sidebar-bot-activity={bot.id} className={cn("mb-1 space-y-0.5", !iconOnly && "ml-6")}>
     {tasks.map((task) => {
       const waiting = task.activity === "waiting-on-you";
+      const failed = isFailed(task);
       const teammateWait = !waiting && task.waitingForTeammates === true;
       const working = !waiting && !teammateWait && (task.busy || task.activity === "working");
-      const status = waiting ? t("sidebar.preview.waiting") : working ? t("chat.activity.working") : teammateWait ? t("sidebar.preview.waitingOnTeammate") : task.queued ? t("task.queued") : t("task.unread");
+      const status = waiting ? t("sidebar.preview.waiting") : failed ? t("task.failed") : working ? t("chat.activity.working") : teammateWait ? t("sidebar.preview.waitingOnTeammate") : task.queued ? t("task.queued") : t("task.unread");
       const title = localizedTaskTitle(task.title);
       const label = `${bot.name}: ${title} · ${status}${task.unread && (waiting || working || teammateWait || task.queued) ? ` · ${t("task.unread")}` : ""}`;
-      const Icon = waiting ? CircleAlert : working ? Loader2 : teammateWait || task.queued ? Clock3 : BellDot;
+      const Icon = waiting ? CircleAlert : failed ? CircleX : working ? Loader2 : teammateWait || task.queued ? Clock3 : BellDot;
       return <button key={task.threadId} type="button" data-sidebar-activity-row={task.threadId} aria-label={label} title={label}
         onClick={() => dispatch({ type: "switchTask", botId: bot.id, threadId: task.threadId })}
         className={cn("flex min-h-7 w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1 text-left text-[11px] outline-none hover:bg-raised/50 focus-visible:ring-1 focus-visible:ring-accent/60", iconOnly && "justify-center", waiting ? "text-warning" : "text-ink-secondary")}>
-        <Icon size={12} aria-hidden="true" className={cn("shrink-0", working && "animate-spin text-success", teammateWait && "text-warning", task.unread && !waiting && !working && !teammateWait && "text-accent")} />
+        <Icon size={12} aria-hidden="true" className={cn("shrink-0", working && "animate-spin text-success", teammateWait && "text-warning", failed && "text-danger", task.unread && !waiting && !working && !teammateWait && "text-accent")} />
         {!iconOnly && <><span className="min-w-0 flex-1 truncate">{title}</span><span className="shrink-0 text-[10px]">{waiting ? t("task.waiting") : status}</span>
           {task.unread && (waiting || working || teammateWait || task.queued) && <span className="size-1.5 shrink-0 rounded-full bg-accent" aria-hidden="true" />}</>}
       </button>;
