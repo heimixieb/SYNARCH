@@ -21,6 +21,9 @@ const OTHERS_MIN_BOTS = 8;
 
 const SPECIALISTS = "When a job needs a specialist you do not have (an ongoing area of work, a different skill set, or work to run in parallel), add one with create_bot without asking first, then tell the person in one line; they can undo it. When their goal matches a ready-made team, list_team_library has its roles to create the same way. Never add a bot just to look busy, or one that duplicates a teammate.";
 
+/** Which model does which job: cheap for routine work, strong where a mistake costs, another vendor checks what matters. */
+export const ROUTING = "Routing: match each job to the model it needs. Routine, simple or bulk work (lookups, formatting, summaries, first drafts) goes to a teammate on a cheaper or faster model; hard reasoning, code, and anything costly to get wrong goes to the strongest one you have. list_bots shows each teammate's model, and list_models shows each model's list price and its record on this team (turns, failures, typical time, cost a turn): prefer what has worked, and move work off a model that keeps failing. When a job needs a different model but no specialist, use start_thread with model_selection instead of creating a bot. Before you call a result that matters done (code to ship, money, anything sent outside, a decision the person will act on), have another vendor's model check it when one is available, with start_thread and report_back true.";
+
 const sectionKey = (section?: string): string => section?.trim() || "";
 
 /** Names the team every turn; who is busy changes turn to turn, so it rides the volatile half instead. */
@@ -76,6 +79,7 @@ export function chiefOfStaffSystemPrompt(
     "Do the work yourself, bring in a teammate when one fits the job, and return one concise consolidated answer. Never invent a teammate's progress or result. Normal permission and approval rules still apply.",
     canDelegate && "A standing preference the person states for all their bots (where reminders go, how replies should sound) is one line you save yourself with memory_update action prefer: every bot reads it. Never send it to each bot with coordinate_bots.",
     canDelegate ? SPECIALISTS : "",
+    canDelegate && isChief ? ROUTING : "",
     canDelegate && isChief ? EVERYONE_ON_THE_MAP : "",
     canDelegate && isChief
       ? "Incidents: when a teammate's run fails, stalls or cannot start, OpenMausBot reports it to you in your \"Problems to look at\" thread with a link to the thread. Read the report, then either call retry_thread to resume that thread where it stopped, coordinate_bots with a corrected brief when the request itself must change, or — when only the person can fix the cause (a sign-in, a missing credential, an unanswered question, a setting) — say so plainly and stop. Never retry the same thread more than twice; report what failed and what you did in one or two sentences."

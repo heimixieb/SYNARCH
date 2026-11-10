@@ -318,7 +318,7 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: "list_models",
-    description: "The ids start_thread's model_selection takes, a short list per engine; current is yours. more counts what search finds. unusable says why not; unavailable engines can't run now. Copy ids exactly.",
+    description: "The ids start_thread's model_selection takes, a short list per engine; current is yours. more counts what search finds. unusable says why not; unavailable engines can't run now. track gives a listed model's list price and its record on this team over 30 days (turns, failures, typical time and cost a turn). Copy ids exactly.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
