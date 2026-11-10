@@ -35,6 +35,9 @@ Setting up another computer: `docs/synarch/00-new-computer.md`.
   big clones or refetches, and npm/pnpm installs go direct (their retries succeed).
 - Work fast: typecheck once per batch of edits, start long test runs in the background and keep working, and do not
   re-prove the known upstream failures listed below.
+- Test rhythm: per feature, only its own unit tests plus one typecheck, then commit and push; at the end of each
+  roadmap phase, one batch of heavy checks (e2e files, fixture runs, real-DeepSeek runs). Never leave all testing to
+  the very end.
 - Git Bash `curl` mangles Chinese request bodies: send them from `python -I` scripts as UTF-8.
 - Goals over HTTP: `POST /api/bots/:id/messages {text, mode: "goal", threadId}`; read `GET /api/threads/:id/messages`.
 - Stopping a fixture through a task stop leaves its `%TEMP%\openmausbot-verify-*` dir: delete only the one it printed.
