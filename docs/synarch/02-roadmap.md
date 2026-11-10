@@ -139,7 +139,7 @@
 **开源和提交给官方（2026-11-11）**
 - `heimixieb/SYNARCH` 改为公开仓库；公开前把早期提交的作者邮箱换成 GitHub 匿名邮箱，仓库里没有密钥。根目录 `README.md` 换成 SYNARCH 介绍，原版说明改名为 `README.openmausbot.md`。
 - 两个通用修复基于官方最新 `main` 重新整理、测试后提交：中文记忆检索 milind-soni/OpenMausBot#5299（对应 #5161），Claude 额度条默认不读登录信息 milind-soni/OpenMausBot#5300（对应 #5079）。分支在 `heimixieb/OpenMausBot`，本机工作目录 `D:\download\omb-pr`。
-- 目标模式里“等队员交回再推进”和“内部标记不露给人”两个修复已从验收功能里拆出来，单独提交给官方（见下一条）。
+- 目标模式里“等队员交回再推进”和“内部标记不露给人”两个修复已从验收功能里拆出来，单独提交给官方：milind-soni/OpenMausBot#5307。
 
 ## 阶段 4：主动工作（缺口 5）—— 不做（2026-11-10 决定）
 
