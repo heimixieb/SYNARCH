@@ -2,11 +2,14 @@ import type { ServerText } from "../shared/server-text.ts";
 import { noticeFailure } from "./chat-notices.ts";
 import type { GroupGoalRunStatus } from "../shared/group-goal-run.ts";
 import type { GroupDefaultResponder } from "./store.ts";
+import type { GoalVerdict } from "./host/goal-verifier.ts";
 
 // Odd so the final bounded turn always falls to the coordinator for the completion decision.
 export const GROUP_GOAL_MAX_TURNS = 13;
 export const GROUP_GOAL_WAIT_MAX_MS = Math.max(1_000, Number(process.env.OMB_GOAL_WAIT_MAX_MS) || 30 * 60_000);
 const GROUP_GOAL_MAX_WAIT_EXHAUSTIONS = 3;
+/** Refuted completions sent back for fixing before the person decides. */
+export const GOAL_MAX_REFUTES = 2;
 export const GROUP_GOAL_CONTROL_OPEN = "<openmaus-goal>";
 export const GROUP_GOAL_CONTROL_CLOSE = "</openmaus-goal>";
 
@@ -199,6 +202,8 @@ export interface GoalRunDeps<Bot extends GoalRunMember> {
   progress(detail: string, text?: ServerText): void;
   /** An activity row in the conversation, from the coordinator. */
   note(text: string): void;
+  /** Checks a claimed completion before the run may end completed. */
+  verify?(report: string): Promise<GoalVerdict>;
 }
 
 // spend_capped is deliberately absent: a cap refusal is deterministic.
@@ -226,6 +231,7 @@ export async function runGoalRun<Bot extends GoalRunMember>(deps: GoalRunDeps<Bo
 
   let coordinatorNote: string | undefined;
   let waitExhaustions = 0;
+  let refutes = 0;
   while (!deps.cancelled() && run.turnCount < run.maxTurns) {
     const coordinatorTurn = run.turnCount + 1;
     const note = coordinatorNote;
@@ -268,9 +274,28 @@ export async function runGoalRun<Bot extends GoalRunMember>(deps: GoalRunDeps<Bo
       return;
     }
 
-    const decision = parseGroupGoalDecision(coordinatorResult.replyText).decision;
+    const { decision, visibleText } = parseGroupGoalDecision(coordinatorResult.replyText);
     if (!decision) {
       deps.finish("blocked", `${coordinator.name} did not provide a valid next-step decision.`);
+      return;
+    }
+    if (decision.status === "completed" && deps.verify) {
+      deps.progress("Independent check of the result is running.");
+      const check = await deps.verify([visibleText, decision.detail].filter(Boolean).join("\n\n"));
+      if (deps.cancelled()) return;
+      if (check.verdict === "pass") {
+        deps.finish("completed", decision.detail);
+        return;
+      }
+      if (check.verdict === "refute" && refutes < GOAL_MAX_REFUTES) {
+        refutes += 1;
+        deps.note(`Independent check by ${check.by} did not accept the result: ${check.reason}`.slice(0, 600));
+        coordinatorNote = `An independent check by ${check.by} did not accept completion: ${check.reason} Fix exactly this, then report completed again.`;
+        continue;
+      }
+      deps.finish("needs-input", (check.verdict === "refute"
+        ? `The independent check by ${check.by} still did not accept the result after ${GOAL_MAX_REFUTES} fixes: ${check.reason}`
+        : `The independent check by ${check.by} could not confirm the result: ${check.reason} Please review it and decide.`).slice(0, 1_000));
       return;
     }
     if (decision.status !== "continue") {

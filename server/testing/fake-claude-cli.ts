@@ -34,6 +34,8 @@
 //   FAKE_CLAUDE_CHECK  fail | hang: how the connection check answers (default OK)
 //   FAKE_CLAUDE_REPLIES  JSON array of replies (string, or string[] for several items) used in order
 //   FAKE_CLAUDE_REPLY_STATE  counter file keeping FAKE_CLAUDE_REPLIES in order across processes
+//   FAKE_CLAUDE_VERDICT  pass (default) | refute | unverifiable: a goal's independent check answers with it and takes no
+//     scripted reply
 //   FAKE_CLAUDE_TOOL_CALLS  JSON [{name, input?, ok?, hold?}] each turn calls before its reply (unset: one Bash call). A call
 //     with `hold` keeps running until FAKE_CLAUDE_RELEASE exists, sending a tool_progress every FAKE_CLAUDE_TOOL_PROGRESS_MS
 //     (default 30000) as 2.1.306 does; hold "busy" | "idle" | "network" also keeps a stand-in child process that burns CPU,
@@ -221,8 +223,12 @@ const markerReplies = (() => {
   }
 })();
 const replyForPrompt = (prompt: JsonValue): string[] | null => {
-  if (!markerReplies) return null;
   const text = steeredText(prompt);
+  if (text.includes("You are an independent verifier.")) {
+    const verdict = process.env.FAKE_CLAUDE_VERDICT || "pass";
+    return [`Checked.\n<openmaus-goal>${JSON.stringify({ verdict, reason: `fixture verdict ${verdict}` })}</openmaus-goal>`];
+  }
+  if (!markerReplies) return null;
   const hit = markerReplies.find(([marker]) => marker !== "" && text.includes(marker));
   return hit ? [hit[1]] : null;
 };

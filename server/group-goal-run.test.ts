@@ -9,10 +9,12 @@ import {
   parseGroupGoalDecision,
   resolveGroupGoalMember,
   runGoalRun,
+  GOAL_MAX_REFUTES,
   selectGroupGoalCoordinator,
   type GoalRunEnd,
   type GoalStepResult,
 } from "./group-goal-run.ts";
+import type { GoalVerdict } from "./host/goal-verifier.ts";
 
 const members = [
   { id: "scout-id", name: "Scout" },
@@ -121,7 +123,7 @@ const envelope = (decision: Record<string, string>) =>
 const settled = (replyText: string): GoalStepResult => ({ ran: true, replyText, outcome: "settled" });
 
 /** Drives the real loop with scripted steps; a step that runs counts one turn, as a claimed member turn does. */
-function goalRun(options: { solo?: boolean; members?: Array<{ id: string; name: string }>; steps: Array<GoalStepResult | ((call: number) => GoalStepResult)>; cancelAfter?: number }) {
+function goalRun(options: { solo?: boolean; members?: Array<{ id: string; name: string }>; steps: Array<GoalStepResult | ((call: number) => GoalStepResult)>; cancelAfter?: number; verify?: (report: string) => Promise<GoalVerdict> }) {
   const members = options.members ?? [{ id: "solo-id", name: "Solo" }];
   const run = { goal: "Get every test passing", turnCount: 0, maxTurns: GROUP_GOAL_MAX_TURNS, finished: false };
   const calls: Array<{ bot: string; coordinator: boolean; instructions: string }> = [];
@@ -149,6 +151,7 @@ function goalRun(options: { solo?: boolean; members?: Array<{ id: string; name: 
     },
     progress: (detail) => progress.push(detail),
     note: () => {},
+    ...(options.verify ? { verify: options.verify } : {}),
   });
   return { done, run, calls, finished, progress };
 }
@@ -241,5 +244,39 @@ describe("one goal-run loop for a room and a one-on-one chat", () => {
     expect(goal.calls.map((call) => [call.bot, call.coordinator])).toEqual([["lead-id", true], ["scout-id", false], ["lead-id", true]]);
     expect(goal.calls[0]!.instructions).toContain("Available room members: Lead (lead-id), Scout (scout-id).");
     expect(goal.finished).toEqual([{ status: "completed", detail: "Draft verified." }]);
+  });
+});
+
+describe("independent check before a goal completes", () => {
+  const done = settled(envelope({ status: "completed", detail: "Every test passes." }));
+  const verdicts = (...list: Array<GoalVerdict["verdict"]>) => {
+    const reports: string[] = [];
+    let call = 0;
+    return { reports, verify: async (report: string): Promise<GoalVerdict> => {
+      reports.push(report);
+      return { verdict: list[Math.min(call++, list.length - 1)]!, reason: "parser test still fails", by: "Checker" };
+    } };
+  };
+
+  it("completes only after the check passes, and sends a refuted claim back with the reason", async () => {
+    const check = verdicts("refute", "pass");
+    const goal = goalRun({ solo: true, steps: [done], verify: check.verify });
+    await goal.done;
+    expect(check.reports[0]).toContain("Every test passes.");
+    expect(goal.calls[1]!.instructions).toContain("An independent check by Checker did not accept completion: parser test still fails");
+    expect(goal.finished).toEqual([{ status: "completed", detail: "Every test passes." }]);
+  });
+
+  it("hands the decision to the person after the refute cap, or when the check cannot confirm", async () => {
+    const stubborn = goalRun({ solo: true, steps: [done], verify: verdicts("refute").verify });
+    await stubborn.done;
+    expect(stubborn.calls).toHaveLength(GOAL_MAX_REFUTES + 1);
+    expect(stubborn.finished[0]!.status).toBe("needs-input");
+
+    const unsure = goalRun({ solo: true, steps: [done], verify: verdicts("unverifiable").verify });
+    await unsure.done;
+    expect(unsure.calls).toHaveLength(1);
+    expect(unsure.finished[0]).toMatchObject({ status: "needs-input" });
+    expect(unsure.finished[0]!.detail).toContain("could not confirm");
   });
 });

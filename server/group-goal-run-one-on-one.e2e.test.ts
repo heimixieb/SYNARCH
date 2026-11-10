@@ -148,10 +148,12 @@ describe("one-on-one goal runs (a room of one)", () => {
     await expect.poll(() => busy(bot.id)).toBe(false);
 
     const sentPrompts = prompts("done");
-    expect(sentPrompts).toHaveLength(2);
+    expect(sentPrompts).toHaveLength(3);
     expect(sentPrompts[0]).toContain("You are working alone toward a bounded goal.");
     expect(sentPrompts[0]).toContain("Get every test passing");
     expect(sentPrompts[1]).toContain("Your next step: Fix the last failing test");
+    expect(sentPrompts[2]).toContain("You are an independent verifier.");
+    expect(sentPrompts[2]).toContain("Every test passes now.");
 
     const messages = await messagesIn(bot.threadId);
     const afterGoal = messages.slice(messages.findIndex((message) => message.id === sent.body.message.id) + 1);

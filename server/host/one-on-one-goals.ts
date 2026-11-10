@@ -11,6 +11,7 @@ import { OUTSIDE, workOrigin, type WorkOrigin } from "../peer-provenance.ts";
 import type { BotRecord, Message, Store } from "../store.ts";
 import type { GoalCards, LiveGoalRun } from "./goal-cards.ts";
 import type { GoalTurns } from "./goal-turns.ts";
+import type { GoalVerifier } from "./goal-verifier.ts";
 
 export interface OneOnOneGoalDeps {
   store: Pick<Store, "appendMessage" | "bot" | "onChange" | "taskByThread" | "titleTaskFromFirstMessage">;
@@ -29,6 +30,7 @@ export interface OneOnOneGoalDeps {
     onSettled: (outcome: HostTurnResult) => void;
   }): Promise<unknown>;
   isUnattended(botId: string, threadId: string): boolean;
+  verify?: GoalVerifier;
 }
 
 export interface OneOnOneGoalStart {
@@ -198,6 +200,7 @@ export function createOneOnOneGoals(deps: OneOnOneGoalDeps) {
       finish: (status, detail, text) => finish(threadId, goal, status, detail, text),
       progress: (detail, text) => deps.cards.progress(threadId, goal.run, detail, text),
       note: (line) => store.appendMessage(threadId, { role: "bot", kind: "activity", tool: { name: line, ok: false } }),
+      ...(deps.verify ? { verify: (report: string) => deps.verify!({ bot, threadId, goal: text, report }) } : {}),
     })
       .catch((error: unknown) => finish(threadId, goal, "failed", error instanceof Error ? error.message : String(error)))
       .finally(() => {
