@@ -122,18 +122,31 @@ function saveDrafts(): void {
   }
 }
 
-export function getDraftChannelMode(store: Store, id: string): ChannelMode {
+/** `fallback` is the conversation's own default: a chief's chat starts in goal mode (SYNARCH), every other in chat. */
+export function getDraftChannelMode(store: Store, id: string, fallback: ChannelMode = "chat"): ChannelMode {
   const memory = memoryFor(store, channelModesByStore, fallbackChannelModes);
   if (memory.has(id)) return memory.get(id)!;
-  const mode = read(store, CHANNEL_MODES_KEY)[id] === "goal" ? "goal" : "chat";
+  const saved = read(store, CHANNEL_MODES_KEY)[id];
+  const mode = saved === "goal" || saved === "chat" ? saved : fallback;
   memory.set(id, mode);
   return mode;
 }
 
-export function setDraftChannelMode(store: Store, id: string, mode: ChannelMode): void {
+/** Back to the conversation's own default mode, whatever that is. */
+function clearDraftChannelMode(store: Store, id: string): void {
+  memoryFor(store, channelModesByStore, fallbackChannelModes).delete(id);
+  const modes = read(store, CHANNEL_MODES_KEY);
+  delete modes[id];
+  try {
+    store?.setItem(CHANNEL_MODES_KEY, JSON.stringify(modes));
+  } catch {
+  }
+}
+
+export function setDraftChannelMode(store: Store, id: string, mode: ChannelMode, fallback: ChannelMode = "chat"): void {
   memoryFor(store, channelModesByStore, fallbackChannelModes).set(id, mode);
   const modes = read(store, CHANNEL_MODES_KEY);
-  if (mode === "goal") modes[id] = mode;
+  if (mode !== fallback) modes[id] = mode;
   else delete modes[id];
   try {
     store?.setItem(CHANNEL_MODES_KEY, JSON.stringify(modes));
@@ -298,7 +311,8 @@ export function restoreComposerDraft(id: string, draft: DraftRestore): void {
   const store = getStore();
   setDraft(store, id, draft.text);
   setDraftAttachments(store, id, draft.attachments);
-  setDraftChannelMode(store, id, draft.channelMode ?? "chat");
+  if (draft.channelMode) setDraftChannelMode(store, id, draft.channelMode);
+  else clearDraftChannelMode(store, id);
   for (const listener of restoreListeners.get(id) ?? []) listener(draft);
 }
 
@@ -479,11 +493,11 @@ function getStore(): Store {
 }
 
 /** A draft's channel mode, the same in every place that shows it: the composer's chip and the bot panel's switch. */
-export function useComposerChannelMode(id: string): [ChannelMode, (next: SetStateAction<ChannelMode>) => void] {
+export function useComposerChannelMode(id: string, fallback: ChannelMode = "chat"): [ChannelMode, (next: SetStateAction<ChannelMode>) => void] {
   const store = getStore();
-  const [mode, setMode] = useState(() => getDraftChannelMode(store, id));
+  const [mode, setMode] = useState(() => getDraftChannelMode(store, id, fallback));
   useEffect(() => {
-    const sync = () => setMode(getDraftChannelMode(store, id));
+    const sync = () => setMode(getDraftChannelMode(store, id, fallback));
     const unsubscribe = subscribeToDraftRestores(id, sync);
     const listeners = channelModeListeners.get(id) ?? new Set<() => void>();
     listeners.add(sync);
@@ -494,13 +508,13 @@ export function useComposerChannelMode(id: string): [ChannelMode, (next: SetStat
       listeners.delete(sync);
       if (listeners.size === 0 && channelModeListeners.get(id) === listeners) channelModeListeners.delete(id);
     };
-  }, [id, store]);
+  }, [id, store, fallback]);
   const set = useCallback((next: SetStateAction<ChannelMode>) => {
-    const value = typeof next === "function" ? next(getDraftChannelMode(store, id)) : next;
-    setDraftChannelMode(store, id, value);
+    const value = typeof next === "function" ? next(getDraftChannelMode(store, id, fallback)) : next;
+    setDraftChannelMode(store, id, value, fallback);
     setMode(value);
     for (const listener of Array.from(channelModeListeners.get(id) ?? [])) listener();
-  }, [id, store]);
+  }, [id, store, fallback]);
   return [mode, set];
 }
 

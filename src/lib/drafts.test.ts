@@ -133,6 +133,22 @@ describe("channel draft delivery mode", () => {
     expect(getDraft(restarted, draftId)).toBe("Finish the release");
   });
 
+  it("starts a conversation in its own default mode and remembers a switch away from it after restart", () => {
+    const store = memoryStorage();
+    Object.defineProperty(globalThis, "localStorage", { configurable: true, value: store });
+    const chief = "bot:chief:main";
+    expect(getDraftChannelMode(store, chief, "goal")).toBe("goal");
+    setDraftChannelMode(store, chief, "chat", "goal");
+    leavePage();
+    const restarted = copyStorage(store);
+    expect(getDraftChannelMode(restarted, chief, "goal")).toBe("chat");
+    setDraftChannelMode(restarted, chief, "goal", "goal");
+    leavePage();
+    expect(JSON.parse(restarted.getItem("omb-draft-channel-modes") ?? "{}")).toEqual({});
+    expect(getDraftChannelMode(copyStorage(restarted), chief, "goal")).toBe("goal");
+    expect(getDraftChannelMode(copyStorage(restarted), "bot:other:main")).toBe("chat");
+  });
+
   it("keeps legacy drafts intact and defaults missing or invalid modes to chat", () => {
     const store = memoryStorage();
     const draftId = "group:legacy:task";

@@ -241,6 +241,20 @@ describe("the Simple composer in a bot chat", () => {
     click(chip);
     expect(container.querySelector("[data-goal-chip]")).toBeNull();
   });
+
+  it("starts a chief's chat in Work until done, with a toggle that stays in view to send one message as chat", () => {
+    render({ bot: { ...bot, chiefOfStaff: true } });
+    const toggle = () => container.querySelector<HTMLButtonElement>('button[aria-pressed][aria-label="Work until done"]');
+    expect(toggle()?.getAttribute("aria-pressed")).toBe("true");
+    click(toggle());
+    expect(toggle()?.getAttribute("aria-pressed")).toBe("false");
+    click(toggle());
+    expect(toggle()?.getAttribute("aria-pressed")).toBe("true");
+    flushSync(() => root.unmount());
+    root = createRoot(container);
+    render({ bot });
+    expect(toggle(), "any other bot still starts in chat, its chip hidden").toBeNull();
+  });
 });
 
 describe("the composer after Set me up", () => {

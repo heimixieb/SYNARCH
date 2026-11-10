@@ -168,7 +168,10 @@ export function Composer({
   );
   const attachmentPending = useDraftAttachmentPending(draftId);
   const failedSends = useFailedComposerSends(draftId); const picks = mentionPicksFor(draftId);
-  const [channelMode, setChannelMode] = useComposerChannelMode(draftId);
+  // SYNARCH: talking to the chief is handing it work, so its chat starts in goal mode; one tap turns a message into chat.
+  const chiefChat = !group && profile?.chiefOfStaff === true;
+  const defaultMode = chiefChat ? "goal" : "chat";
+  const [channelMode, setChannelMode] = useComposerChannelMode(draftId, defaultMode);
   const editText = useCallback(
     (next: string) => {
       markDraftEdited(draftId);
@@ -592,7 +595,7 @@ export function Composer({
     setText("");
     setAttachments([]); picks.clear();
     onConsumeReply?.();
-    setChannelMode("chat");
+    setChannelMode(defaultMode);
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -809,7 +812,7 @@ export function Composer({
               </button>}
               {advanced && canLearn && <TeachTaskButton onClick={teachTask} />}
               {/* Simple mode shows a mode's chip only while it is on, so a choice made in the + menu or the bot panel stays in view. */}
-              {goal && (advanced || goal.on) && <GoalToggle {...goal} compact={simpleDock} />}
+              {goal && (advanced || goal.on || chiefChat) && <GoalToggle {...goal} compact={simpleDock && !chiefChat} />}
               {advanced && approvalChoice && <ApprovalModeSelector {...approvalChoice} />}
               {simpleDock && approvalChoice && profile && bot && approvalModeFor(bot) !== approvalModeFor(profile) && <ApprovalChip choice={approvalChoice} />}
               {modeBot && !remoteClient && advanced && (
