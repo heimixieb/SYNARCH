@@ -1,6 +1,7 @@
+import { chiefLevel } from "../chief-level.ts";
 import { chiefTidies } from "../chief-of-staff.ts";
 import type { Coordinator, HandoffView } from "../coordinator.ts";
-import { reachablePeers } from "../peer-roster.ts";
+import { canManage, reachablePeers } from "../peer-roster.ts";
 import type { BotRecord, Store, TaskRecord } from "../store.ts";
 import { PASS, type RouteHandler } from "./table.ts";
 import { conversationLanguage, serverLine } from "../server-lines.ts";
@@ -14,6 +15,8 @@ interface ThreadRow {
   /** Why a queued handoff hasn't started (host/queued-reason.ts). */
   waiting?: string;
   openedBy?: string;
+  /** The person's own conversation with a bot the Chief manages: shown by title and state alone. */
+  person?: true;
 }
 
 /** Only dispatch inside the internal capability gate: `from` and `fromThreadId` come from the caller's capability. */
@@ -32,7 +35,8 @@ export function createInternalThreadRoutes(deps: {
 }): RouteHandler {
   const { store, coordinator, from, fromThreadId } = deps;
   return async ({ res, path, method, json }) => {
-    // list_threads: the caller's own threads plus, on reachable peers, only threads it opened; a peer's other threads are its own business.
+    // list_threads: the caller's own threads plus, on reachable peers, only threads it opened; a peer's other threads are its own business,
+    // except that a Chief sees which of the person's conversations with its team are in motion or unread, never their words.
     if (method === "GET" && path === "/api/internal/threads") {
       if (!deps.ownsThread(from.id, fromThreadId)) {
         return json(res, 403, { error: "source conversation does not belong to sender" });
@@ -64,7 +68,17 @@ export function createInternalThreadRoutes(deps: {
       for (const peer of reachablePeers(store.bots, from)) {
         for (const task of store.tasks(peer.id)) {
           const opener = task.openedBy;
-          if (!opener || !deps.shown(task.threadId)) continue;
+          if (!deps.shown(task.threadId)) continue;
+          if (!opener) {
+            if (!chiefLevel(from) || task.private || task.routineRunId || !canManage(from, peer)) continue;
+            const state = stateOf(peer, task);
+            if (state === "closed" || (state === "idle" && !task.unread)) continue;
+            rows.push({
+              threadId: task.threadId, botId: peer.id, botName: peer.name, title: task.title,
+              state, unread: task.unread === true, openedAt: task.createdAt, own: false, person: true, ...queued(peer, task, state),
+            });
+            continue;
+          }
           const mine = opener.botId === from.id;
           if (!mine && !chiefTidies(from, task, store.bot(opener.botId), peer)) continue;
           const state = stateOf(peer, task);

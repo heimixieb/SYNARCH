@@ -13,9 +13,9 @@ const tasks: Record<string, TaskRecord[]> = {
   "bot-ops": [task("t-ops-busy", "Weekly report"), task("t-ops-new", "Export CSV", { botId: "bot-lead", name: "Lead", at: 5 })],
 };
 
-async function listThreads(from: BotRecord) {
+async function listThreads(from: BotRecord, extra: TaskRecord[] = []) {
   const route = createInternalThreadRoutes({
-    store: { bot: (id: string) => [lead, ops].find((bot) => bot.id === id), bots: [lead, ops], tasks: (id: string) => tasks[id] ?? [] } as never,
+    store: { bot: (id: string) => [lead, ops].find((bot) => bot.id === id), bots: [lead, ops], tasks: (id: string) => [...(tasks[id] ?? []), ...(id === "bot-ops" ? extra : [])] } as never,
     coordinator: { awaitingAnswer: () => false, parkedDirect: () => undefined, activeDirect: (threadId: string) => threadId === "t-ops-new" ? handoff : undefined, active: () => [handoff] } as never,
     from, fromThreadId: "t-own", ownsThread: () => true, shown: () => true,
     threadBusy: (_bot, threadId) => threadId === "t-ops-busy", queuedThreadPosition: () => null,
@@ -38,5 +38,23 @@ describe("list_threads on a queued handoff", () => {
     const running = rows.find((thread) => thread.threadId === "t-ops-busy");
     expect(running).toMatchObject({ state: "running" });
     expect(running).not.toHaveProperty("waiting");
+  });
+});
+
+describe("list_threads for a Chief of Staff", () => {
+  const chief = { ...lead, chiefOfStaff: true } as BotRecord;
+  const person = [
+    { ...task("t-ops-unread", "Invoice check"), unread: true },
+    task("t-ops-idle", "Old chat"),
+    { ...task("t-ops-private", "Mine alone"), unread: true, private: true },
+  ] as TaskRecord[];
+
+  it("shows the person's own conversations on its team that run or are unread, and nothing idle or private", async () => {
+    const rows = (await listThreads(chief, person)).filter((thread) => thread.person === true);
+    expect(rows.map((thread) => [thread.threadId, thread.state])).toEqual([["t-ops-busy", "running"], ["t-ops-unread", "idle"]]);
+  });
+
+  it("keeps the person's conversations from a bot that is not a Chief", async () => {
+    expect((await listThreads(lead, person)).some((thread) => thread.person === true)).toBe(false);
   });
 });

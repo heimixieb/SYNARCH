@@ -279,7 +279,7 @@ const TOOL_DEFINITIONS = [
   {
     name: "list_threads",
     description:
-      "See your own threads and the threads you opened on teammates, newest first: each with its bot, title, state (running, waiting on the person, queued, idle, or closed), whether the person has unread there, and the delegation id if it was a handoff. Use it to check how the threads you started are going before reporting to the person; write a thread's title as #Title when you mention it. A Chief of Staff also sees threads teammates opened on each other. This is a read: it starts nothing and changes nothing.",
+      "See your own threads and the threads you opened on teammates, newest first: each with its bot, title, state (running, waiting on the person, queued, idle, or closed), whether the person has unread there, and the delegation id if it was a handoff. Use it to check how the threads you started are going before reporting to the person; write a thread's title as #Title when you mention it. A Chief of Staff also sees threads teammates opened on each other, and the person's own conversations with its team that are active or unread. This is a read: it starts nothing and changes nothing.",
     inputSchema: { type: "object", additionalProperties: false, properties: {} },
   },
   {
