@@ -17,6 +17,13 @@ describe("pickVerifierModel", () => {
     expect(pickVerifierModel({ current, engines: [{ instanceId: "ds", name: "DeepSeek", models: ["flash", "pro"] }] }, driver)).toEqual({ instanceId: "ds", model: "pro" });
     expect(pickVerifierModel({ current, engines: [{ instanceId: "claude", name: "Claude", unusable: "signed out" }] }, driver)).toEqual(current);
   });
+
+  it("never checks with a retired name the vendor serves with the same model", () => {
+    const flash = { instanceId: "ds", model: "deepseek-official/deepseek-flash" };
+    const models = ["deepseek-official/deepseek-flash", "deepseek-official/deepseek-v4-flash", "deepseek-official/deepseek-v4-pro"];
+    expect(pickVerifierModel({ current: flash, engines: [{ instanceId: "ds", name: "DeepSeek", models }] }, driver))
+      .toEqual({ instanceId: "ds", model: "deepseek-official/deepseek-v4-pro" });
+  });
 });
 
 describe("parseVerdict", () => {

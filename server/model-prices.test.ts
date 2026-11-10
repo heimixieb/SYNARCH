@@ -9,6 +9,7 @@ const OFFICIAL = [
   "https://ai.google.dev/",
   "https://platform.minimax.io/",
   "https://openrouter.ai/",
+  "https://api-docs.deepseek.com/",
 ];
 
 describe("built-in list prices", () => {
@@ -24,6 +25,11 @@ describe("built-in list prices", () => {
         expect(period.cachedInputPerMillion ?? 0).toBeLessThanOrEqual(period.inputPerMillion);
       }
     }
+  });
+
+  it("prices a retired DeepSeek name as the model that now serves it", () => {
+    expect(listPriceFor("deepseek-official/deepseek-v4-flash")).toEqual(listPriceFor("deepseek-official/deepseek-flash"));
+    expect(listPriceFor("deepseek-official/deepseek-flash")).toEqual({ inputPerMillion: 0.3, cachedInputPerMillion: 0.006, outputPerMillion: 1.2 });
   });
 
   it("looks models up case-insensitively, through catalog aliases, and follows announced price changes", () => {

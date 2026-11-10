@@ -3,6 +3,7 @@
 // thread on another model checks the claim and refutes it by default.
 import type { ModelSelection } from "../../shared/wire.ts";
 import type { ModelMenu } from "../routes/internal-models.ts";
+import { SERVED_AS } from "../model-prices.ts";
 import { GROUP_GOAL_CONTROL_CLOSE, GROUP_GOAL_CONTROL_OPEN } from "../group-goal-run.ts";
 import type { HostTurnResult } from "../coordinator.ts";
 import { OUTSIDE } from "../peer-provenance.ts";
@@ -46,8 +47,9 @@ export interface GoalVerifierDeps {
 export function pickVerifierModel(menu: Pick<ModelMenu, "current" | "engines">, driverOf: (instanceId: string) => string | undefined): ModelSelection {
   const usable = menu.engines.flatMap((engine) => (engine.models ?? []).map((model) => ({ instanceId: engine.instanceId, model: typeof model === "string" ? model : model.id })));
   const vendor = driverOf(menu.current.instanceId);
+  const served = (model: string) => SERVED_AS[model] ?? model;
   return usable.find((selection) => driverOf(selection.instanceId) !== vendor)
-    ?? usable.find((selection) => selection.instanceId === menu.current.instanceId && selection.model !== menu.current.model)
+    ?? usable.find((selection) => selection.instanceId === menu.current.instanceId && served(selection.model) !== served(menu.current.model))
     ?? menu.current;
 }
 

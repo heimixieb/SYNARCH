@@ -13,6 +13,7 @@ const ANTHROPIC = "https://platform.claude.com/docs/en/about-claude/pricing";
 const XAI = "https://docs.x.ai/developers/models";
 const GOOGLE = "https://ai.google.dev/gemini-api/docs/pricing";
 const MINIMAX = "https://platform.minimax.io/docs/guides/pricing-paygo";
+const DEEPSEEK = "https://api-docs.deepseek.com/quick_start/pricing";
 // OpenRouter's live list discounts some models despite its FAQ, so these are read from that list, not copied from vendors.
 const OPENROUTER = "https://openrouter.ai/api/v1/models";
 
@@ -90,10 +91,19 @@ export const LIST_PRICES: Readonly<Record<string, ListPrice>> = {
   "google/gemini-3.8-flash": price(OPENROUTER, 0.75, 0.075, 3.75),
   "minimax/minimax-m3": price(OPENROUTER, 0.3, 0.06, 1.2),
   "minimax/minimax-m2.7": price(OPENROUTER, 0.3, 0.06, 1.2),
+  // shortcut: DeepSeek's peak rates (weekday 01:00-04:00 and 06:00-10:00 UTC); every other hour costs half. Read 2026-11-10.
+  "deepseek-official/deepseek-flash": price(DEEPSEEK, 0.3, 0.006, 1.2, { asOf: "2026-11-10" }),
+  "deepseek-official/deepseek-v4-pro": price(DEEPSEEK, 1.32, 0.044, 3.96, { asOf: "2026-11-10" }),
+};
+
+/** Retired model names a vendor still accepts but serves with another model: one model for prices and for checks. */
+export const SERVED_AS: Readonly<Record<string, string>> = {
+  "deepseek-official/deepseek-v4-flash": "deepseek-official/deepseek-flash",
 };
 
 /** The Antigravity picker offers Gemini 3.8 Flash at three thinking levels. */
 const ALIASES: Readonly<Record<string, string>> = {
+  ...SERVED_AS,
   "gemini-3.8-flash-high": "gemini-3.8-flash",
   "gemini-3.8-flash-medium": "gemini-3.8-flash",
   "gemini-3.8-flash-low": "gemini-3.8-flash",
