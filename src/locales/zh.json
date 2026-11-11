@@ -6527,6 +6527,8 @@
   "chiefRouting.description": "{name} 会把每件活交给最擅长的模型。可以在这里写下每个模型擅长或不擅长什么，也可以直接在聊天里告诉 {name}。",
   "chiefRouting.checkGoals": "活做完后换一个模型验收",
   "chiefRouting.checkGoalsHint": "关掉后，活做完直接算完成，不再验收。更快更省钱，但错误可能漏过去。",
+  "chiefRouting.watchJobs": "干活时另找模型看有没有跑偏",
+  "chiefRouting.watchJobsHint": "默认关掉。打开后，目标进行中会另找一个模型判断是否卡住或跑偏；先提醒一次，还不行再找你。没事时不说话。官方原有的超时检测照常工作。",
   "chiefRouting.model": "模型",
   "chiefRouting.pick": "选择模型",
   "chiefRouting.tagsPlaceholder": "它擅长或不擅长什么，比如：擅长中文写作，长代码一般",

@@ -3,6 +3,7 @@ import { noticeFailure } from "./chat-notices.ts";
 import type { GroupGoalRunStatus } from "../shared/group-goal-run.ts";
 import type { GroupDefaultResponder } from "./store.ts";
 import type { GoalVerdict } from "./host/goal-verifier.ts";
+import type { WatchAction } from "./synarch-watchdog.ts";
 
 // Odd so the final bounded turn always falls to the coordinator for the completion decision.
 export const GROUP_GOAL_MAX_TURNS = 13;
@@ -205,10 +206,28 @@ export interface GoalRunDeps<Bot extends GoalRunMember> {
   note(text: string): void;
   /** Checks a claimed completion before the run may end completed. */
   verify?(report: string): Promise<GoalVerdict>;
+  /** After a settled step: another model may nudge once or escalate once; quiet otherwise. Official stall timeouts still apply. */
+  watch?(job: { latest: string; turn: number }): Promise<WatchAction>;
 }
 
 // spend_capped is deliberately absent: a cap refusal is deterministic.
 const TRANSIENT_STEP: ReadonlySet<GoalStepOutcome | undefined> = new Set(["provider_failed", "dispatch_failed", "stalled", "timed_out"]);
+
+/** Applies one watchdog action. `stop` ends the run; `nudge` is appended to the next coordinator note. */
+async function applyWatch<Bot extends GoalRunMember>(
+  deps: GoalRunDeps<Bot>,
+  latest: string,
+  turn: number,
+): Promise<{ stop: boolean; nudge?: string }> {
+  const action = await deps.watch!({ latest, turn });
+  if (action.action === "quiet") return { stop: false };
+  if (action.action === "nudge") {
+    deps.note(`Watchdog (${action.by}): ${action.note}`.slice(0, 600));
+    return { stop: false, nudge: action.note };
+  }
+  deps.finish("needs-input", `Watchdog (${action.by}): ${action.reason}`.slice(0, 1_000));
+  return { stop: true };
+}
 
 async function stepOnceRetried<Bot extends GoalRunMember>(deps: GoalRunDeps<Bot>, bot: Bot, coordinator: boolean, instructions: string): Promise<GoalStepResult> {
   const first = await deps.step(bot, coordinator, instructions);
@@ -310,6 +329,9 @@ export async function runGoalRun<Bot extends GoalRunMember>(deps: GoalRunDeps<Bo
       deps.finish(decision.status, decision.detail);
       return;
     }
+    // Watch only while work continues: completion is the verifier's job; silence and stalls stay with TurnWatchdog.
+    const watched = deps.watch ? await applyWatch(deps, visibleText || decision.detail || decision.instruction, run.turnCount) : { stop: false };
+    if (watched.stop) return;
     if (run.turnCount >= run.maxTurns) break;
 
     const worker = resolveGroupGoalMember(decision.next, goalMembers);
@@ -330,7 +352,10 @@ export async function runGoalRun<Bot extends GoalRunMember>(deps: GoalRunDeps<Bo
       return;
     }
     if (deps.solo && workerBot.id === coordinator.id) {
-      coordinatorNote = `Your next step: ${decision.instruction}`;
+      coordinatorNote = [
+        `Your next step: ${decision.instruction}`,
+        watched.nudge ? `Watchdog correction: ${watched.nudge}` : "",
+      ].filter(Boolean).join("\n");
       continue;
     }
 
@@ -369,6 +394,14 @@ export async function runGoalRun<Bot extends GoalRunMember>(deps: GoalRunDeps<Bo
       const reason = workerResult.stopReason?.trim().slice(0, 120);
       deps.finish("failed", `${workerBot.name} could not return a result to ${coordinator.name}${reason ? ` — ${reason}` : ""}.`);
       return;
+    }
+    const watchedWorker = deps.watch ? await applyWatch(deps, workerResult.replyText, run.turnCount) : { stop: false };
+    if (watchedWorker.stop) return;
+    if (watchedWorker.nudge) {
+      coordinatorNote = [
+        `Result from ${workerBot.name}:\n${workerResult.replyText.trim().slice(0, 2_000)}`,
+        `Watchdog correction: ${watchedWorker.nudge}`,
+      ].join("\n\n");
     }
   }
 

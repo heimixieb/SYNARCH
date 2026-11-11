@@ -458,7 +458,7 @@ import { screenFrameHash, screenSurfaceForTool, screenTouchingTool, settledFrame
 import { asSchedule, RoutineRequestService } from "./routine-requests.ts"; import { ownerSpokeOnly } from "./cloud-routine-level.ts"; import { routineRunCard, routineRunFallbackText } from "./routine-run-card.ts";
 import { activeRoutinesContext } from "./active-routines-context.ts";
 import { createRefusedHandoffs } from "./host/refused-handoffs.ts"; import { automationContextText, createAutomationReports, newestAutomationLines } from "./automation-reports.ts"; import { createAutomationDestinations } from "./automation-destinations.ts"; import { createProactive } from "./host/proactive.ts"; import { createFirstHourHooks, startFirstHour, welcomeDonePatch } from "./host/first-hour-host.ts"; import { greetingMessage } from "./host/first-hour.ts"; import { READ_AND_DRAFT_PARTS, READ_AND_DRAFT_REFUSAL, READ_AND_DRAFT_TOOLS, recordsAnswer } from "./read-and-draft.ts"; import { createPresenceRoutes } from "./routes/presence.ts"; import { needsYouNow } from "./today.ts";
-import { engineLabel, LimitResetClock, nearLimitNote } from "./limit-resets.ts"; import { loadPlanUsage, planAccountsFromInstances } from "./plan-usage.ts"; import { LimitFailovers, limitBackupAllowed } from "./limit-failover.ts"; import { markFailedTurns } from "./turn-failure-marks.ts"; import { createGoalVerifier, pickVerifierModel } from "./host/goal-verifier.ts"; import { createLimitResetRoutes } from "./routes/limit-resets.ts";
+import { engineLabel, LimitResetClock, nearLimitNote } from "./limit-resets.ts"; import { loadPlanUsage, planAccountsFromInstances } from "./plan-usage.ts"; import { LimitFailovers, limitBackupAllowed } from "./limit-failover.ts"; import { markFailedTurns } from "./turn-failure-marks.ts"; import { createGoalVerifier, pickVerifierModel } from "./host/goal-verifier.ts"; import { createSynarchWatchdog, pickWatchdogModel } from "./synarch-watchdog.ts"; import { createLimitResetRoutes } from "./routes/limit-resets.ts";
 import { parseTriggerRequest, triggerTarget } from "./trigger-tools.ts"; import { WebhookRequestError, WebhookRequestService } from "./webhook-requests.ts"; import { createAppTriggerHost } from "./app-trigger-host.ts";
 import { appliesNow, directApply, UNDO_STALE, type DirectApply } from "./direct-apply.ts";
 import { createTeamMemoryRequests } from "./team-memory-requests.ts";
@@ -3569,10 +3569,10 @@ function activeGroupSpeaker(groupId: string): { botId: string; name: string; col
 
 const goalTurns = createGoalTurns({ retireProviderTurn });
 const goalCards = createGoalCards({ store, routines: () => routines, notify, routineSourceOwner, routineSourceThread });
-const goalVerifier = createGoalVerifier({ store, turns: goalTurns, startTurn, isUnattended, modelName, off: () => !readSynarchSettings(DATA_DIR).checkGoals, verifierModel: (bot, threadId) => pickVerifierModel(ownThreads.menu(bot.id, threadId, undefined) ?? { current: bot.modelSelection, engines: [] }, (id) => registry.cliTarget(id)?.driverKind) });
-const oneOnOneGoals = createOneOnOneGoals({
-  store, cards: goalCards, turns: goalTurns, canStart: (botId, threadId) => canAdmitDirectTurn(botId, threadId) && !threadsAwaitingTeammates().has(threadId), startTurn, isUnattended, verify: goalVerifier,
-});
+const goalJudge = (bot: { id: string; modelSelection: ModelSelection }, threadId: string) => ({ menu: ownThreads.menu(bot.id, threadId, undefined) ?? { current: bot.modelSelection, engines: [] }, driver: (id: string) => registry.cliTarget(id)?.driverKind });
+const goalVerifier = createGoalVerifier({ store, turns: goalTurns, startTurn, isUnattended, modelName, off: () => !readSynarchSettings(DATA_DIR).checkGoals, verifierModel: (bot, threadId) => { const j = goalJudge(bot, threadId); return pickVerifierModel(j.menu, j.driver); } });
+const synarchWatchdog = createSynarchWatchdog({ store, turns: goalTurns, startTurn, isUnattended, modelName, off: () => !readSynarchSettings(DATA_DIR).watchJobs, judgeModel: (bot, threadId) => { const j = goalJudge(bot, threadId); return pickWatchdogModel(j.menu, j.driver); } });
+const oneOnOneGoals = createOneOnOneGoals({ store, cards: goalCards, turns: goalTurns, canStart: (botId, threadId) => canAdmitDirectTurn(botId, threadId) && !threadsAwaitingTeammates().has(threadId), startTurn, isUnattended, verify: goalVerifier, watch: synarchWatchdog });
 
 function groupIsWorking(group: GroupRecord): boolean {
   return Boolean(group.busyBotId) || Boolean(groupTurnOperations.get(group.id)?.size);
@@ -10727,9 +10727,9 @@ async function runGroupGoalOperation(args: {
     coordinator: args.coordinator,
     members: args.members,
     cancelled: () => args.operation.cancelled,
-    current: (botId) => store.bot(botId) ?? undefined, verify: (report) => goalVerifier({ bot: args.coordinator, threadId: args.threadId, goal: run.goal, report }),
+    current: (botId) => store.bot(botId) ?? undefined, verify: (report) => goalVerifier({ bot: args.coordinator, threadId: args.threadId, goal: run.goal, report }), watch: (job) => synarchWatchdog.inspect({ bot: args.coordinator, threadId: args.threadId, goal: run.goal, latest: job.latest, turn: job.turn }),
     step: (bot, coordinator, instructions) => runGroupGoalStep({ ...args, bot, skillAuthoringClaim, coordinator, instructions }),
-    finish: (status, detail, text) => finishGroupGoalRun(args.groupId, args.operation, status, detail, text),
+    finish: (status, detail, text) => { synarchWatchdog.forget(args.threadId); finishGroupGoalRun(args.groupId, args.operation, status, detail, text); },
     progress: (detail, text) => updateGroupGoalRunProgress(args.operation, detail, text),
     note: (text) => store.appendMessage(args.threadId, {
       role: "bot",

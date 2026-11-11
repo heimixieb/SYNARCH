@@ -34,6 +34,7 @@
 //   FAKE_CLAUDE_CHECK  fail | hang: how the connection check answers (default OK)
 //   FAKE_CLAUDE_REPLIES  JSON array of replies (string, or string[] for several items) used in order
 //   FAKE_CLAUDE_REPLY_STATE  counter file keeping FAKE_CLAUDE_REPLIES in order across processes
+//   FAKE_CLAUDE_WATCH    ok (default) | stuck | drifted | needs_person: a goal watchdog answers with it (stuck/drifted use FAKE_CLAUDE_WATCH_NUDGE)
 //   FAKE_CLAUDE_VERDICT  pass (default) | refute | unverifiable: a goal's independent check answers with it and takes no
 //     scripted reply
 //   FAKE_CLAUDE_TOOL_CALLS  JSON [{name, input?, ok?, hold?}] each turn calls before its reply (unset: one Bash call). A call
@@ -227,6 +228,14 @@ const replyForPrompt = (prompt: JsonValue): string[] | null => {
   if (text.includes("You are an independent verifier.")) {
     const verdict = process.env.FAKE_CLAUDE_VERDICT || "pass";
     return [`Checked.\n<openmaus-goal>${JSON.stringify({ verdict, reason: `fixture verdict ${verdict}` })}</openmaus-goal>`];
+  }
+  if (text.includes("You are an independent watchdog.")) {
+    const verdict = process.env.FAKE_CLAUDE_WATCH || "ok";
+    const nudge = process.env.FAKE_CLAUDE_WATCH_NUDGE || "Try a different approach toward the goal.";
+    const payload = verdict === "stuck" || verdict === "drifted"
+      ? { verdict, reason: `fixture watch ${verdict}`, nudge }
+      : { verdict, reason: `fixture watch ${verdict}` };
+    return [`Watched.\n<openmaus-goal>${JSON.stringify(payload)}</openmaus-goal>`];
   }
   if (!markerReplies) return null;
   const hit = markerReplies.find(([marker]) => marker !== "" && text.includes(marker));

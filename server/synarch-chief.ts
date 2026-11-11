@@ -63,9 +63,14 @@ function writeJson(file: string, value: unknown): void {
   renameSync(`${file}.tmp`, file);
 }
 
-/** The person's SYNARCH switches. Independent checks of a finished goal are on unless turned off; workerModel is the model a
- * chief's job runs on when the chief names none (else the chief's own, usually the dearest). */
-export interface SynarchSettings { checkGoals: boolean; workerModel?: { instanceId: string; model: string } }
+/** The person's SYNARCH switches. Independent checks of a finished goal are on unless turned off; watchJobs (default off)
+ * asks another model whether in-progress goal work is stuck or off track; workerModel is the model a chief's job runs on
+ * when the chief names none (else the chief's own, usually the dearest). */
+export interface SynarchSettings {
+  checkGoals: boolean;
+  watchJobs: boolean;
+  workerModel?: { instanceId: string; model: string };
+}
 const settingsFile = (dataDir: string) => join(dataDir, "synarch-settings.json");
 const modelRef = (value: unknown): SynarchSettings["workerModel"] => {
   const raw = value && typeof value === "object" ? value as Record<string, unknown> : {};
@@ -74,7 +79,11 @@ const modelRef = (value: unknown): SynarchSettings["workerModel"] => {
 };
 export function readSynarchSettings(dataDir: string): SynarchSettings {
   const raw = readJson(settingsFile(dataDir)), workerModel = modelRef(raw.workerModel);
-  return { checkGoals: raw.checkGoals !== false, ...(workerModel ? { workerModel } : {}) };
+  return {
+    checkGoals: raw.checkGoals !== false,
+    watchJobs: raw.watchJobs === true,
+    ...(workerModel ? { workerModel } : {}),
+  };
 }
 
 /** The model a chief's own job runs on when it named none: the person's default worker model, if set. */
@@ -128,10 +137,12 @@ export function createSynarchSettingsRoutes(deps: { dataDir: string }): RouteHan
       const body = await readBody(req, 8_000);
       const workerModel = body.workerModel === null ? null : modelRef(body.workerModel);
       if (body.checkGoals !== undefined && typeof body.checkGoals !== "boolean") return json(res, 400, { error: "checkGoals must be true or false." });
+      if (body.watchJobs !== undefined && typeof body.watchJobs !== "boolean") return json(res, 400, { error: "watchJobs must be true or false." });
       if (body.workerModel !== undefined && workerModel === undefined) return json(res, 400, { error: "workerModel needs instanceId and model, or null." });
-      if (body.checkGoals === undefined && body.workerModel === undefined) return json(res, 400, { error: "Nothing to change." });
+      if (body.checkGoals === undefined && body.watchJobs === undefined && body.workerModel === undefined) return json(res, 400, { error: "Nothing to change." });
       const { workerModel: _old, ...kept } = readSynarchSettings(deps.dataDir);
       const next = { ...kept, ...(typeof body.checkGoals === "boolean" ? { checkGoals: body.checkGoals } : {}),
+        ...(typeof body.watchJobs === "boolean" ? { watchJobs: body.watchJobs } : {}),
         ...(workerModel ? { workerModel } : workerModel === null ? {} : _old ? { workerModel: _old } : {}) };
       writeJson(settingsFile(deps.dataDir), next);
       return json(res, 200, next);
