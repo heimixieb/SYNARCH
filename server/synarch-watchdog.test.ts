@@ -95,6 +95,16 @@ describe("createSynarchWatchdog", () => {
     expect((await inspect([line({ verdict: "ok", reason: "early" })], { turn: 1 })).prompts).toEqual([]);
   });
 
+  it("forget clears a spent nudge so a later goal in the same conversation can nudge again", async () => {
+    const stuck = line({ verdict: "stuck", reason: "loop", nudge: "Try another approach." });
+    const first = await inspect([stuck, stuck]);
+    expect(first.action).toEqual({ action: "nudge", note: "Try another approach.", by: "Pro" });
+    first.watchdog.forget("goal");
+    expect(await first.watchdog.inspect({
+      bot: { id: "b", name: "B" } as never, threadId: "goal", goal: "write a.txt", latest: "new run", turn: 3,
+    })).toEqual({ action: "nudge", note: "Try another approach.", by: "Pro" });
+  });
+
   it("names the goal and latest work in the instructions", () => {
     expect(watchdogInstructions({ goal: "写诗", latest: "写了两行" }, "Bot: 写了两行")).toContain("写诗");
     expect(watchdogInstructions({ goal: "写诗", latest: "写了两行" }, "Bot: 写了两行")).toContain("写了两行");
@@ -171,6 +181,37 @@ describe("watchdog inside a goal run", () => {
     const scout = calls.find((call) => call.bot === "scout");
     expect(scout?.instructions).toContain("Fix the parser");
     expect(scout?.instructions).toContain("Watchdog correction: Open the failing test first.");
+    expect(finished).toEqual([{ status: "completed" }]);
+  });
+
+  it("keeps a coordinator nudge for the next lead turn when the worker stays busy", async () => {
+    const run = { goal: "Get every test passing", turnCount: 0, maxTurns: 13, finished: false };
+    const finished: Array<{ status: string }> = [];
+    const calls: string[] = [];
+    let leadTurns = 0;
+    await runGoalRun({
+      run,
+      coordinator: { id: "lead", name: "Lead" },
+      members: [{ id: "lead", name: "Lead" }, { id: "scout", name: "Scout" }],
+      cancelled: () => false,
+      current: (id) => id === "lead" ? { id: "lead", name: "Lead" } : { id: "scout", name: "Scout" },
+      step: async (_bot, coordinator, instructions) => {
+        calls.push(instructions);
+        if (coordinator) {
+          leadTurns += 1;
+          run.turnCount += 1;
+          return settled(leadTurns === 1
+            ? envelope({ status: "continue", next: "scout", instruction: "Fix the parser", detail: "Handed out" })
+            : envelope({ status: "completed", detail: "Reassigned and done." }));
+        }
+        return { ran: false, replyText: "", outcome: "busy", stopReason: "Scout stayed busy" };
+      },
+      finish: (status) => { run.finished = true; finished.push({ status }); },
+      progress: () => {},
+      note: () => {},
+      watch: async () => ({ action: "nudge", note: "Give it to someone free.", by: "Pro" }),
+    });
+    expect(calls.some((text) => text.includes("Watchdog correction: Give it to someone free."))).toBe(true);
     expect(finished).toEqual([{ status: "completed" }]);
   });
 
