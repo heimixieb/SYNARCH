@@ -108,6 +108,9 @@ export async function runRoomHandoffAgent(argv: string[], planPath: string, prom
   if (JSON.stringify(prompt ?? "").includes("You are an independent verifier.")) {
     return `Checked.\n<openmaus-goal>${JSON.stringify({ verdict: "pass", reason: "fixture check" })}</openmaus-goal>`;
   }
+  if (JSON.stringify(prompt ?? "").includes("You are an independent watchdog.")) {
+    return `Watched.\n<openmaus-goal>${JSON.stringify({ verdict: "ok", reason: "fixture watch" })}</openmaus-goal>`;
+  }
   const mounted = launch ? [] : Object.values(JSON.parse(readAtLaunch(arg("--mcp-config"))).mcpServers as Record<string, AgentsIntegration>);
   // With a tool selection every server sits behind the gate, which names its upstream in OMB_GATE_UPSTREAM.
   const agentEnv = (server: AgentsIntegration): Record<string, string> => {

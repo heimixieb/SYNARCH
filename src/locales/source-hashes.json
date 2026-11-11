@@ -41458,7 +41458,9 @@
       "chiefRouting.saveFailed": "680c88ccf5d4c9fe60c44c3a541c39e5aa80c9d6e76377c886e7c00a1421dc0d",
       "chiefRouting.workerModel": "742d1a05c4761a2920e54ee0500cd98b541ab29fb821fe0a6e650bc93a72dcb8",
       "chiefRouting.workerModelHint": "52cd45ec4f907caaa7d8bd670d685f4efa953821b16ba4a7d91e3428689abae4",
-      "chiefRouting.sameAsChief": "cee772e3a2eb998fbf5d289682fef8beb2934bdee1ea60cb42a44b95581ff8bf"
+      "chiefRouting.sameAsChief": "cee772e3a2eb998fbf5d289682fef8beb2934bdee1ea60cb42a44b95581ff8bf",
+      "chiefRouting.watchJobs": "6e71105d1eb07c9aab338fa75594a745b9a5cd7a099cf18083737e1db09160d9",
+      "chiefRouting.watchJobsHint": "804e0b287c4e7713527fd4d62dc919141f4314ca2fb8992f64e70c131dad0ddd"
     },
     "zh-tw": {
       "whop.description": "1a07cf04ef17029448d3781415cbac16d54e66b821907a40d94e0e6349710e70",

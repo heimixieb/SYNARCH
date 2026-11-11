@@ -20,6 +20,7 @@ SYNARCH 是 [OpenMausBot](https://github.com/milind-soni/OpenMausBot) 的一个*
 - **原话转交、追问续派**：每个派出去的活都附上你的原话；“改一下刚才那个”会交回原来的工作对话。
 - **独立验收**：活做完后换一个模型（优先别家厂商）检查，不通过就打回，可在设置里关掉。
 - **少打扰**：总管只在结果出来、需要你决定、做不下去时找你，一次只问一个问题。
+- **看门狗**：可选。目标干活时另找一个模型看有没有卡住或跑偏；没事不说话，先提醒一次，还不行再找你。
 - **中文记忆搜索**：修好了原版用中文搜不到过去笔记的问题。
 
 ## 和 DeepSeek 设计的对照
@@ -32,7 +33,7 @@ SYNARCH 是 [OpenMausBot](https://github.com/milind-soni/OpenMausBot) 的一个*
 | 后续消息直通对应 Worker（订阅） | 部分：总管可续派到原工作对话；你也可以直接在工作对话里说 |
 | 少打扰、一次一个问题、如实报告 | 已做（靠规则，没有程序强制） |
 | 按角色设置模型 | 已做：默认干活模型 |
-| Watchdog 判断 Worker 是否跑偏 | 没做（只有官方原有的超时检测） |
+| Watchdog 判断 Worker 是否跑偏 | 已做：默认关；打开后另找模型看目标是否卡住/跑偏，先提醒一次再找你；官方超时检测照常 |
 | 异步长任务 | 没做 |
 | 事件驱动、主动处理、先观察后自动 | 不做：面向团队和无人值守场景，一个人直接派活用不上 |
 | 计算、状态与环境分离（BYOM） | 没做 |
@@ -69,6 +70,6 @@ pnpm dev          # 网页 → http://127.0.0.1:5199
 
 **One person, many models, one chief.**
 
-SYNARCH is an **unofficial fork** of [OpenMausBot](https://github.com/milind-soni/OpenMausBot) reshaped after the DeepSeek Harness team's *Exploring Super-agent Design*. You talk only to the Chief. In your conversations it cannot run commands or change files. It hands each job to the model best at it, picking by tags you write and by each model's recent record per kind of work. It splits staged work across models, forwards your own words with every job, and sends follow-ups to the job that did the work. Another vendor's model checks the result before it counts as done, and you are interrupted only for results, decisions and stops.
+SYNARCH is an **unofficial fork** of [OpenMausBot](https://github.com/milind-soni/OpenMausBot) reshaped after the DeepSeek Harness team's *Exploring Super-agent Design*. You talk only to the Chief. In your conversations it cannot run commands or change files. It hands each job to the model best at it, picking by tags you write and by each model's recent record per kind of work. It splits staged work across models, forwards your own words with every job, and sends follow-ups to the job that did the work. Another vendor's model checks the result before it counts as done. An optional watchdog (off by default) can judge whether in-progress goal work is stuck or off track. You are interrupted only for results, decisions and stops.
 
 **Research prototype, unfinished.** The main flow is tested end to end only on Windows with DeepSeek models. See the table above for what is done and what is not, and [docs/synarch/02-roadmap.md](docs/synarch/02-roadmap.md) (Chinese) for details. Not affiliated with DeepSeek or OpenMausBot. Licensed under Apache-2.0, like the project it builds on.

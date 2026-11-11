@@ -6,7 +6,7 @@ import { api } from "@/state/api";
 import { useStore } from "@/state/store";
 
 type ModelRef = { instanceId: string; model: string };
-type Settings = { checkGoals: boolean; workerModel?: ModelRef; tags: Record<string, string> };
+type Settings = { checkGoals: boolean; watchJobs: boolean; workerModel?: ModelRef; tags: Record<string, string> };
 
 /** SYNARCH: the chief's routing switches, and what each model is good at (the same tags the chief saves with tag_model). */
 export function ChiefRoutingSettings({ name }: { name: string }) {
@@ -35,7 +35,7 @@ export function ChiefRoutingSettings({ name }: { name: string }) {
       setError(t("chiefRouting.saveFailed"));
     }
   };
-  const saveSettings = async (change: { checkGoals?: boolean; workerModel?: ModelRef | null }) => {
+  const saveSettings = async (change: { checkGoals?: boolean; watchJobs?: boolean; workerModel?: ModelRef | null }) => {
     setError("");
     try {
       const saved = await api<Omit<Settings, "tags">>("/api/synarch/settings", { method: "POST", body: JSON.stringify(change) });
@@ -57,6 +57,14 @@ export function ChiefRoutingSettings({ name }: { name: string }) {
           <span>
             <span className="font-medium">{t("chiefRouting.checkGoals")}</span>
             <span className="block text-ink-secondary">{t("chiefRouting.checkGoalsHint")}</span>
+          </span>
+        </label>
+        <label className="mt-3 flex items-start gap-2 text-[13px] text-ink">
+          <input type="checkbox" className="mt-0.5 accent-accent" checked={settings.watchJobs}
+            onChange={event => void saveSettings({ watchJobs: event.target.checked })} />
+          <span>
+            <span className="font-medium">{t("chiefRouting.watchJobs")}</span>
+            <span className="block text-ink-secondary">{t("chiefRouting.watchJobsHint")}</span>
           </span>
         </label>
         <label className="mt-3 flex flex-col gap-1 text-[13px] text-ink">

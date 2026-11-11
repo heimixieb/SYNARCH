@@ -6853,6 +6853,8 @@
   "chiefRouting.description": "{name} hands each job to the model that's best at it. Write down here what each model is good or bad at, or just tell {name} in chat.",
   "chiefRouting.checkGoals": "Check finished work with another model",
   "chiefRouting.checkGoalsHint": "Off: finished work counts as done without a check. Faster and cheaper, but mistakes can slip through.",
+  "chiefRouting.watchJobs": "Watch in-progress work for drift",
+  "chiefRouting.watchJobsHint": "Off by default. When on, another model judges whether a running goal is stuck or off track: one nudge, then it asks you. Stays quiet when things look fine. The ordinary stall timeout still applies.",
   "chiefRouting.model": "Model",
   "chiefRouting.pick": "Choose a model",
   "chiefRouting.tagsPlaceholder": "What it's good or bad at, for example: good at Chinese writing, weak at long code",

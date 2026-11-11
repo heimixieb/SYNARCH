@@ -124,18 +124,20 @@ describe("stages and settings", () => {
         json: ((_res: unknown, status: number, value: Record<string, unknown>) => { reply = { status, value }; }) as never, readBody: (async () => body) as never });
       return outcome === PASS ? PASS : reply!;
     };
-    expect(readSynarchSettings(dir)).toEqual({ checkGoals: true });
+    expect(readSynarchSettings(dir)).toEqual({ checkGoals: true, watchJobs: false });
     expect(await call("/api/synarch/settings", "POST", { checkGoals: "no" })).toMatchObject({ status: 400 });
-    expect(await call("/api/synarch/settings", "POST", { checkGoals: false })).toMatchObject({ status: 200, value: { checkGoals: false } });
+    expect(await call("/api/synarch/settings", "POST", { checkGoals: false })).toMatchObject({ status: 200, value: { checkGoals: false, watchJobs: false } });
     expect(await call("/api/synarch/model-tags", "POST", { instanceId: "deepseek", model: "flash", tags: "cheap drafts" })).toMatchObject({ status: 200 });
-    expect(await call("/api/synarch/settings", "GET")).toMatchObject({ status: 200, value: { checkGoals: false, tags: { "deepseek/flash": "cheap drafts" } } });
+    expect(await call("/api/synarch/settings", "GET")).toMatchObject({ status: 200, value: { checkGoals: false, watchJobs: false, tags: { "deepseek/flash": "cheap drafts" } } });
     expect(await call("/api/synarch/other", "GET")).toBe(PASS);
-    expect(await call("/api/synarch/settings", "POST", { workerModel: { instanceId: "deepseek", model: "flash" } })).toMatchObject({ status: 200, value: { checkGoals: false, workerModel: { instanceId: "deepseek", model: "flash" } } });
-    expect(await call("/api/synarch/settings", "POST", { checkGoals: true })).toMatchObject({ value: { checkGoals: true, workerModel: { model: "flash" } } });
+    expect(await call("/api/synarch/settings", "POST", { workerModel: { instanceId: "deepseek", model: "flash" } })).toMatchObject({ status: 200, value: { checkGoals: false, watchJobs: false, workerModel: { instanceId: "deepseek", model: "flash" } } });
+    expect(await call("/api/synarch/settings", "POST", { checkGoals: true, watchJobs: true })).toMatchObject({ value: { checkGoals: true, watchJobs: true, workerModel: { model: "flash" } } });
     expect(await call("/api/synarch/settings", "POST", { workerModel: { model: "flash" } })).toMatchObject({ status: 400 });
     expect(await call("/api/synarch/settings", "POST", {})).toMatchObject({ status: 400 });
-    expect(await call("/api/synarch/settings", "POST", { workerModel: null })).toMatchObject({ status: 200, value: { checkGoals: true } });
-    expect(readSynarchSettings(dir)).toEqual({ checkGoals: true });
+    expect(await call("/api/synarch/settings", "POST", { workerModel: null })).toMatchObject({ status: 200, value: { checkGoals: true, watchJobs: true } });
+    expect(readSynarchSettings(dir)).toEqual({ checkGoals: true, watchJobs: true });
+    expect(await call("/api/synarch/settings", "POST", { watchJobs: false })).toMatchObject({ status: 200, value: { watchJobs: false } });
+    expect(readSynarchSettings(dir)).toEqual({ checkGoals: true, watchJobs: false });
   });
 
   it("runs a chief's own job on the person's default worker model only when the chief named none", async () => {
