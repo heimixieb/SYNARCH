@@ -32,6 +32,7 @@ import { parse as parseYaml } from "yaml";
 import type { ModelCatalog } from "../../contracts.ts";
 import { harnessHome } from "../../env-path.ts";
 import { resolveCli } from "../../procs.ts";
+import { DEEPSEEK_WORKER_JOBS_PROMPT, WORKER_JOBS_PATCH } from "../../synarch-deepseek-jobs.ts";
 import { createAcpDriver, type AcpSupport } from "./core.ts";
 
 export const DEEPSEEK_MODELS: ModelCatalog = {
@@ -303,8 +304,11 @@ export const deepseekSupport: AcpSupport = {
   },
 
   // dsh asks no one before writing in its workspace, so a hands-off turn gets its own process with the shell off and a
-  // read-only sandbox; an escalation it then asks for comes to the server, which refuses it.
-  spawnArgs: (_config, turn) => ["--profile", "acp", ...(turn.handsOff ? ["--patch", handsOffPatch()] : [])],
+  // read-only sandbox; an escalation it then asks for comes to the server, which refuses it. A worker turn patches the
+  // ACP profile so long shell commands promote to background jobs (DeepSeek Super-agent worker preset).
+  spawnArgs: (_config, turn) => ["--profile", "acp", "--patch", turn.handsOff ? handsOffPatch() : workerJobsPatch()],
+  /** Keep the OMB turn open across dsh job wakeups so report_back / goals do not finish early. */
+  autonomousFollowups: true,
   credentialEnv: ["DEEPSEEK_API_KEY"],
   // Model and reasoning effort are session config options (see header).
   selectModel: { configId: "model" },
@@ -333,7 +337,10 @@ export const deepseekSupport: AcpSupport = {
   },
 
   // House convention for ACP harnesses: the persona rides in the prompt text.
-  buildPromptText: (turn) => (turn.system ? `${turn.system}\n\n${turn.text}` : turn.text),
+  buildPromptText: (turn) => {
+    const body = turn.system ? `${turn.system}\n\n${turn.text}` : turn.text;
+    return turn.handsOff ? body : `${body}${DEEPSEEK_WORKER_JOBS_PROMPT}`;
+  },
 };
 
 /** The dsh overlay for a hands-off turn, written once per process to the temp folder (a packaged app has no source tree). */
@@ -349,6 +356,15 @@ function handsOffPatch(): string {
     handsOffPatchFile = file;
   }
   return handsOffPatchFile;
+}
+let workerJobsPatchFile: string | undefined;
+function workerJobsPatch(): string {
+  if (!workerJobsPatchFile) {
+    const file = join(tmpdir(), `synarch-dsh-worker-jobs-${process.pid}.yml`);
+    writeFileSync(file, WORKER_JOBS_PATCH);
+    workerJobsPatchFile = file;
+  }
+  return workerJobsPatchFile;
 }
 
 export const DeepSeekAgentDriver = createAcpDriver(deepseekSupport);

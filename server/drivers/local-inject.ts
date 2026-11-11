@@ -80,6 +80,11 @@ export function decodeInjectId(id: string | null | undefined): { host: string; m
   return { host, model: (isOllamaHost(host) ? servedModel(hostOrigin(known), model)?.model : undefined) ?? model };
 }
 
+/** A local-host inject needs no cloud subscription authenticate step. */
+export function skipSubscriptionAuthForLocalInject(model: string | undefined): boolean {
+  return Boolean(decodeInjectId(model));
+}
+
 /** The window a local pick will run with, once its turn has decided it. */
 export function injectedContextWindow(id: string | null | undefined): number | undefined {
   const sep = id?.indexOf(INJECT_SEP) ?? -1;

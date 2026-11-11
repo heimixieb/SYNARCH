@@ -1,9 +1,7 @@
 import { type ServerText } from "../../../shared/server-text.ts";
-// The shared ACP (JSON-RPC 2.0 over stdio) driver; per-CLI quirks live in an AcpSupport.
-// ACP has no turn/completed: the session/prompt result (stopReason + usage) is the completion.
-// session/load replays history as ordinary session/update notifications, so nothing emits before
-// the prompt is sent and `_meta.isReplay` updates are dropped. Permissions fail closed: only an
-// `allow`-kind option approves, and option order is never a security contract.
+// Shared ACP (JSON-RPC 2.0 over stdio) driver; per-CLI quirks live in AcpSupport. session/prompt's
+// stopReason is completion (no turn/completed). session/load replays as session/update — drop those
+// before the prompt and any `_meta.isReplay`. Permissions fail closed: only an `allow`-kind option.
 import { mkdtempSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { lstat, mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
@@ -13,8 +11,10 @@ import { createHash } from "node:crypto";
 import { PROVIDER_CREDENTIAL_ENV, stripControlPlaneEnv, WORKSPACE_CREDENTIAL_ENV } from "../../config.ts";
 import { openStartupModelCatalog } from "../../startup-model-catalog.ts";
 import { acpModelCatalog } from "./model-catalog.ts";
-import { decodeInjectId } from "../local-inject.ts";
+import { skipSubscriptionAuthForLocalInject } from "../local-inject.ts";
+export { skipSubscriptionAuthForLocalInject };
 import { DeviceAuthController, deviceAuthInstanceSurface, type DeviceSignIn } from "../device-auth.ts";
+import { attachBackgroundFollowup, endTurnOrHoldBackground, observeAutonomousUpdate } from "./background-jobs.ts";
 import { deletePromptSplitReceipt, promptHalves, readPromptSplitReceipt, splitSessionPrompt, writePromptSplitReceipt } from "../prompt-split.ts";
 import type { PromptSplitReceipt } from "../prompt-split.ts";
 import { describeSpawnFailure, execCli, killCliTree, sharedBoxScope, spawnCli } from "../../procs.ts";
@@ -28,10 +28,6 @@ import {
 import { readSessionReport } from "./session-reports.ts";
 import { pickSessionModel, SessionModelControls, type AcpModelSelection } from "./session-model-controls.ts";
 import { notThisCli, versionFromProbe } from "./version-probe.ts"; import { engineHomes } from "../../engine-homes/engine-homes.ts";
-
-export function skipSubscriptionAuthForLocalInject(model: string | undefined): boolean {
-  return Boolean(decodeInjectId(model));
-}
 
 import type {
   DriverCreateInput,
@@ -187,6 +183,8 @@ export interface AcpSupport {
   clientCapabilitiesMeta?: Record<string, unknown>;
   /** Made once per process: rewrites a session/update before the turn reads it, or drops it by returning null. */
   updateFilter?(): (update: Record<string, any>) => Record<string, any> | null;
+  /** end_turn with open background jobs keeps the OMB turn until a job wakeup settles (DeepSeek). */
+  autonomousFollowups?: boolean;
   /** The agent reaches MCP servers by URL: OpenMausBot's own servers are this server's endpoints, no process each. */
   ownMcpOverHttp?: boolean;
   /** How many tools the agent lists of its own beside the MCP servers', counted against a provider's tool limit. */
@@ -260,10 +258,7 @@ export interface AcpSupport {
 }
 
 const envOr = (key: string, fallback: number): number => Number(process.env[key] ?? fallback);
-const INIT_TIMEOUT = 300_000;
-const SESSION_CONFIG_TIMEOUT = 300_000;
-const NEW_SESSION_TIMEOUT = 300_000;
-const LOAD_SESSION_TIMEOUT = 120_000;
+const INIT_TIMEOUT = 300_000, SESSION_CONFIG_TIMEOUT = 300_000, NEW_SESSION_TIMEOUT = 300_000, LOAD_SESSION_TIMEOUT = 120_000;
 const ACP_STUCK_AFTER_MS = 180_000;
 const SHARED_SESSIONS_MAX = 6, SHARED_SESSIONS_LIFETIME = 12;
 /** Closing a session for these leaves its process fit for other threads' sessions; any other reason retires it. */
@@ -598,6 +593,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
       const settle = (threadId: string, session: AcpSession, ok: boolean, stopReason: string | null) => {
         const current = session.current;
         if (!current || current.state.settled) return;
+        current.backgroundHold?.dispose();
         current.state.settled = true;
         current.acknowledge();
         current.stopQuietWatch?.();
@@ -877,6 +873,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
           if (!current || !current.state.promptSent) return;
           const u = filterUpdate ? filterUpdate(p.update ?? {}) : p.update ?? {};
           if (!u) return;
+          if (support.autonomousFollowups) observeAutonomousUpdate(current, u);
           const finished = u.status === "completed" || u.status === "failed";
           const toolEnded = (itemId: string | undefined) => {
             current.state.producedItem = true;
@@ -1171,6 +1168,8 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
           state.repliedText = true;
           emit({ ...base(threadId, turnId), type: "item.completed", itemType: "assistant_text", text });
         };
+        const runningTools = new Set<string>();
+        const followup = support.autonomousFollowups ? attachBackgroundFollowup(runningTools) : undefined;
         const current: AcpTurn = {
           turnId,
           turn: cliTurn,
@@ -1179,13 +1178,14 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
           state,
           acknowledge,
           asks,
-          runningTools: new Set(),
+          runningTools,
           unkeyedToolIds: [],
           endedToolIds: new Set(),
           interruptTimer: null,
           stopQuietWatch: null,
           flushAssistantText,
           receiveModelVariants,
+          ...followup,
         };
 
         const interrupt = () => {
@@ -1508,7 +1508,7 @@ export function createAcpDriver(support: AcpSupport): ProviderDriver<AcpConfig> 
               });
             }
             const reason = result?.stopReason;
-            if (reason === "end_turn") settle(threadId, session, true, null);
+            if (reason === "end_turn") endTurnOrHoldBackground(support, current, () => settle(threadId, session, true, null));
             else if (reason === "cancelled" || state.stopped) settle(threadId, session, true, "cancelled");
             else {
               emit({

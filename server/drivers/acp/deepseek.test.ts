@@ -135,19 +135,32 @@ describe("DeepSeek key detection", () => {
 });
 
 describe("DeepSeek ACP support", () => {
-  it("starts a hands-off turn's dsh with the shell off and a read-only sandbox, and any other with neither", () => {
+  it("starts a hands-off turn's dsh with the shell off, and a worker turn with short background-job promotion", () => {
     const args = deepseekSupport.spawnArgs({ cli: "dsh", fullAuto: false }, { handsOff: true } as never);
     expect(args.slice(0, 3)).toEqual(["--profile", "acp", "--patch"]);
     expect(readFileSync(args[3]!, "utf8")).toBe(HANDS_OFF_PATCH);
     for (const line of ["    mode: read-only", "- id: tool-pwsh", "- id: tool-bash", "- id: tool-jobs"]) expect(HANDS_OFF_PATCH).toContain(line);
-    expect(deepseekSupport.spawnArgs({ cli: "dsh", fullAuto: true }, { handsOff: false } as never)).toEqual(["--profile", "acp"]);
+    const worker = deepseekSupport.spawnArgs({ cli: "dsh", fullAuto: true }, { handsOff: false } as never);
+    expect(worker.slice(0, 3)).toEqual(["--profile", "acp", "--patch"]);
+    const patch = readFileSync(worker[3]!, "utf8");
+    expect(patch).toContain("timeoutMs: 5000");
+    expect(patch).toContain("completionDelivery: wakeup");
+    expect(patch).toContain("enableRunInBackground: true");
+    expect(deepseekSupport.autonomousFollowups).toBe(true);
+  });
+
+  it("appends background-job guidance on worker prompts, not on hands-off ones", () => {
+    const worker = deepseekSupport.buildPromptText?.({ system: "You are Maus.", text: "hi", handsOff: false } as never) ?? "";
+    expect(worker).toContain("You are Maus.\n\nhi");
+    expect(worker).toContain("prefer bash/pwsh with run_in_background true");
+    expect(deepseekSupport.buildPromptText?.({ system: "You are Maus.", text: "hi", handsOff: true } as never)).toBe("You are Maus.\n\nhi");
   });
 
   it("spawns dsh in its ACP profile and selects model + variants over the wire", () => {
     expect(deepseekSupport.driverKind).toBe("deepseekAgent");
     expect(deepseekSupport.displayName).toBe("DeepSeek Harness");
     expect(deepseekSupport.defaultCli).toBe("dsh");
-    expect(deepseekSupport.spawnArgs({ cli: "dsh", fullAuto: false }, {} as never)).toEqual(["--profile", "acp"]);
+    expect(deepseekSupport.spawnArgs({ cli: "dsh", fullAuto: false }, {} as never).slice(0, 3)).toEqual(["--profile", "acp", "--patch"]);
     expect(deepseekSupport.selectModel).toEqual({ configId: "model" });
     expect(deepseekSupport.modelVariants).toBe(true);
     expect(deepseekSupport.resumeMethod).toBe("resume");
@@ -191,8 +204,8 @@ describe("DeepSeek ACP support", () => {
   });
 
   it("puts the persona ahead of the prompt text", () => {
-    expect(deepseekSupport.buildPromptText?.({ system: "You are Maus.", text: "hi" } as never)).toBe("You are Maus.\n\nhi");
-    expect(deepseekSupport.buildPromptText?.({ system: "", text: "hi" } as never)).toBe("hi");
+    expect(deepseekSupport.buildPromptText?.({ system: "You are Maus.", text: "hi", handsOff: true } as never)).toBe("You are Maus.\n\nhi");
+    expect(deepseekSupport.buildPromptText?.({ system: "", text: "hi", handsOff: true } as never)).toBe("hi");
   });
 });
 
