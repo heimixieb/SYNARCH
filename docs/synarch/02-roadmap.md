@@ -130,7 +130,7 @@
 - 追问续派：原型里后续消息直接送到负责的工作对话。`start_thread` 加了 `continue_thread`：总管把“改一下刚才那个”发回原来的工作对话（保留历史、模型和文件），不再新开。规则也写了“新活才新开”。
 - 少打扰：总管规则加了“只在结果出来、需要你决定、做不下去时说话；接活确认一次，干活时不汇报，不重复；要你决定时一次问一个具体问题，不替你决定；分清做完、半成品、失败”。派出去的每个活末尾附一句同样要求的说明（`CHIEF_JOB_NOTE`）。
 - 看门狗看进展（另找模型判断是否跑偏）—— 完成（见 3.7）。
-- 没做的：长命令放后台（DeepSeek 引擎有但默认没开），以后再说。
+- 长命令放后台 —— 完成（见 3.8）。
 - 验证：类型检查、代码规范、多语言检查通过；相关 13 个测试文件全过（新加 3 个测试）；工具说明快照已更新，非总管的工具清单大小预算从 48379 调到 49391（`start_thread` 多了两个参数）。
 
 **3.7 看门狗看进展 —— 完成（2026-11-11，只跑单元测试和类型检查，没做真实模型实测）**
@@ -139,6 +139,14 @@
 - 默认关掉（保守）：「派活和验收」卡片里新开关“干活时另找模型看有没有跑偏”，打开才生效；存在 `synarch-settings.json` 的 `watchJobs`。
 - 代码：新文件 `server/synarch-watchdog.ts`（含测试）；`group-goal-run.ts` 在继续干活和队员交回后接入；`synarch-chief.ts` 设置；界面 `ChiefRoutingSettings.tsx`；假引擎对看门狗提示自动答 `ok`；`index.ts` 在原有行上接入。
 - 验证：类型检查、代码规范、多语言检查、行数限制通过；相关单元测试通过（含看门狗、总管设置、目标循环）。没有在真实模型上跑过。
+
+**3.8 长命令放后台 —— 完成（2026-11-11，只跑单元测试和类型检查，没做真实模型实测）**
+- 核实：DeepSeek 的 `dsh` ACP 配置里本来就有 `tool-jobs`（`run_in_background`、超时升后台、`job_output`/`job_list`/`job_kill`、做完后 `completionDelivery=wakeup`）。总管对话仍用 `HANDS_OFF_PATCH` 关掉 shell/jobs。真正缺的是：① OMB 系统提示要求“命令必须前台跑完”，和引擎能力对着干；② `session/prompt` 一返回 `end_turn`，OMB 就清掉当前回合，后面的 wakeup 通知全部丢掉，目标/`report_back` 也会过早当成做完。
+- 做法（只动 DeepSeek worker，总管不动手）：worker 回合给 dsh 打补丁，前台命令约 5 秒升后台、任务等待也约 5 秒、完成后 wakeup（对齐 DeepSeek Super-agent worker 预设）；worker 提示词写明用后台任务、不要空等；ACP 在看到后台 job 仍在跑时，`end_turn` 后先不结束这一轮，等 wakeup 安静下来或满 30 分钟再结算（官方卡住检测照常；持有期间用占位工具避免静默误杀）。
+- 人/总管怎么用：总管照旧派活；干活的 DeepSeek 队员跑长命令时不必卡死整轮；命令做完引擎会叫醒它，它收齐结果后再向总管交回。Claude 原生后台仍保持关闭（审批边界）。
+- 代码：新文件 `server/synarch-deepseek-jobs.ts`、`server/drivers/acp/background-jobs.ts`（含测试）；`deepseek.ts` 接 worker 补丁与 `autonomousFollowups`；`acp/core.ts` 在原有行上接入；假 ACP 可模拟“结束后再唤醒”。
+- 验证：类型检查、代码规范、行数限制通过；相关单元测试通过（含 job 跟踪、hold、worker 补丁、ACP 唤醒接线）。没有在真实模型上跑过。
+- 没做的：Stage 4 主动观察/自动；给 Claude/Codex 另做一套原生后台；独立第二总管进程；BYOM。
 
 **查清“早就存在的测试失败”（2026-11-12）**
 - `room-roots` 的两条 R9 和 `image-generation` 的一条不是官方的毛病，也不是“等队员”修复造成的：官方最新代码加上“等队员”“隐藏内部标记”两个修复后全部通过。真正原因是 SYNARCH 的独立验收——这几个测试用的脚本假模型没给验收步骤准备回答，验收判“查不了”，目标就停在“需要你处理”。已让脚本假模型对验收自动回答“通过”（`server/testing/room-handoff-agent.ts`，和 `fake-claude-cli` 的默认一致），目标相关 9 个端到端测试文件全过。

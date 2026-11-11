@@ -967,6 +967,19 @@ function handle(msg: any) {
         result(msg.id, { stopReason: "end_turn", _meta: { inputTokens: 12, outputTokens: 4 } });
         return;
       }
+      // DeepSeek-style: finish the prompt with a background job still running, then wake with a follow-up update.
+      if (process.env.FAKE_ACP_BG_JOB_FOLLOWUP === "1") {
+        out({ jsonrpc: "2.0", method: "session/update", params: { update: {
+          sessionUpdate: "tool_call", toolCallId: "bg-1", status: "completed", title: "bash",
+          rawOutput: "started background job bash-aabbccddeeff0011",
+        } } });
+        out({ jsonrpc: "2.0", method: "session/update", params: { update: { sessionUpdate: "agent_message_chunk", content: { text: "build started in the background" } } } });
+        result(msg.id, { stopReason: "end_turn", _meta: { inputTokens: 10, outputTokens: 5 } });
+        setTimeout(() => {
+          out({ jsonrpc: "2.0", method: "session/update", params: { update: { sessionUpdate: "agent_message_chunk", content: { text: "background job bash-aabbccddeeff0011 (build) finished [status: completed]. Output: ok\nbuild done" } } } });
+        }, Number(process.env.FAKE_ACP_BG_JOB_FOLLOWUP_MS ?? 200));
+        return;
+      }
       const fullPrompt = (Array.isArray(msg.params?.prompt) ? msg.params.prompt : []).map((block: any) => block?.text ?? "").join("");
       const hangOn = process.env.FAKE_ACP_HANG_ON, hangOnce = process.env.FAKE_ACP_HANG_ONCE_FILE;
       const held = Boolean(hangOn) && fullPrompt.includes(hangOn!) && !(hangOnce && existsSync(hangOnce));

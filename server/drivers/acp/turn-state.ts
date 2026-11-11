@@ -4,6 +4,7 @@ import type { RequestOutcome, SendTurnInput } from "../../contracts.ts";
 import type { spawnCli } from "../../procs.ts";
 import { noticeFailure } from "../../chat-notices.ts";
 import { errorReplyFailure, type ErrorReplyFailure } from "../engine-errors.ts";
+import type { BackgroundHold, BackgroundJobTracker } from "./background-jobs.ts";
 import type { AcpConfig } from "./core.ts";
 import type { AcpHost, AcpLink } from "./host.ts";
 
@@ -37,6 +38,9 @@ export interface AcpTurn {
   stopQuietWatch: (() => void) | null;
   flushAssistantText: () => void;
   receiveModelVariants: (result: any) => void;
+  /** DeepSeek-style background shell jobs: keep the turn until wakeup or the hold cap. */
+  backgroundJobs?: BackgroundJobTracker;
+  backgroundHold?: BackgroundHold;
 }
 
 export interface AcpSession {
