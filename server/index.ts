@@ -4188,6 +4188,7 @@ function finishGroupGoalRun(
   status: Exclude<GroupGoalRunStatus, "working">,
   detail: string, text?: Parameters<typeof goalCards.progress>[3],
 ): void {
+  synarchWatchdog.forget(operation.threadId);
   goalCards.finish(operation.threadId, operation.goalRun, status, detail, () => {
     const group = store.group(groupId);
     return group?.dm ? group.threadId === operation.threadId : Boolean(group && store.groupTaskByThread(group.id, operation.threadId));
@@ -10729,7 +10730,7 @@ async function runGroupGoalOperation(args: {
     cancelled: () => args.operation.cancelled,
     current: (botId) => store.bot(botId) ?? undefined, verify: (report) => goalVerifier({ bot: args.coordinator, threadId: args.threadId, goal: run.goal, report }), watch: (job) => synarchWatchdog.inspect({ bot: args.coordinator, threadId: args.threadId, goal: run.goal, latest: job.latest, turn: job.turn }),
     step: (bot, coordinator, instructions) => runGroupGoalStep({ ...args, bot, skillAuthoringClaim, coordinator, instructions }),
-    finish: (status, detail, text) => { synarchWatchdog.forget(args.threadId); finishGroupGoalRun(args.groupId, args.operation, status, detail, text); },
+    finish: (status, detail, text) => finishGroupGoalRun(args.groupId, args.operation, status, detail, text),
     progress: (detail, text) => updateGroupGoalRunProgress(args.operation, detail, text),
     note: (text) => store.appendMessage(args.threadId, {
       role: "bot",

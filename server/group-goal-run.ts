@@ -206,14 +206,14 @@ export interface GoalRunDeps<Bot extends GoalRunMember> {
   note(text: string): void;
   /** Checks a claimed completion before the run may end completed. */
   verify?(report: string): Promise<GoalVerdict>;
-  /** After a settled step: another model may nudge once or escalate once; quiet otherwise. Official stall timeouts still apply. */
   watch?(job: { latest: string; turn: number }): Promise<WatchAction>;
 }
 
 // spend_capped is deliberately absent: a cap refusal is deterministic.
 const TRANSIENT_STEP: ReadonlySet<GoalStepOutcome | undefined> = new Set(["provider_failed", "dispatch_failed", "stalled", "timed_out"]);
 
-/** Applies one watchdog action. `stop` ends the run; `nudge` is appended to the next coordinator note. */
+const withWatchCorrection = (text: string, nudge?: string) => nudge ? `${text}\n\nWatchdog correction: ${nudge}` : text;
+
 async function applyWatch<Bot extends GoalRunMember>(
   deps: GoalRunDeps<Bot>,
   latest: string,
@@ -329,7 +329,6 @@ export async function runGoalRun<Bot extends GoalRunMember>(deps: GoalRunDeps<Bo
       deps.finish(decision.status, decision.detail);
       return;
     }
-    // Watch only while work continues: completion is the verifier's job; silence and stalls stay with TurnWatchdog.
     const watched = deps.watch ? await applyWatch(deps, visibleText || decision.detail || decision.instruction, run.turnCount) : { stop: false };
     if (watched.stop) return;
     if (run.turnCount >= run.maxTurns) break;
@@ -352,10 +351,7 @@ export async function runGoalRun<Bot extends GoalRunMember>(deps: GoalRunDeps<Bo
       return;
     }
     if (deps.solo && workerBot.id === coordinator.id) {
-      coordinatorNote = [
-        `Your next step: ${decision.instruction}`,
-        watched.nudge ? `Watchdog correction: ${watched.nudge}` : "",
-      ].filter(Boolean).join("\n");
+      coordinatorNote = withWatchCorrection(`Your next step: ${decision.instruction}`, watched.nudge);
       continue;
     }
 
@@ -363,7 +359,7 @@ export async function runGoalRun<Bot extends GoalRunMember>(deps: GoalRunDeps<Bo
     const workerResult = await stepOnceRetried(deps, workerBot, false, groupGoalWorkerInstructions({
       goal: run.goal,
       coordinatorName: coordinator.name,
-      assignment: decision.instruction,
+      assignment: withWatchCorrection(decision.instruction, watched.nudge),
       turn: workerTurn,
       maxTurns: run.maxTurns,
     }));
@@ -385,9 +381,11 @@ export async function runGoalRun<Bot extends GoalRunMember>(deps: GoalRunDeps<Bo
       const reason = workerResult.stopReason?.trim().slice(0, 120) ?? `${workerBot.name} stayed busy`;
       deps.note(`${reason} — asking ${coordinator.name} to reassign`);
       deps.progress(`${reason}. ${coordinator.name} is reassigning.`);
-      coordinatorNote =
+      coordinatorNote = withWatchCorrection(
         `${reason} and could not take the assignment "${decision.instruction.slice(0, 160)}". ` +
-        "Reassign it to another available member, do it yourself if you can, or report blocked.";
+        "Reassign it to another available member, do it yourself if you can, or report blocked.",
+        watched.nudge,
+      );
       continue;
     }
     if (!workerResult.ran || workerResult.outcome !== "settled" || !workerResult.replyText.trim()) {
@@ -398,10 +396,10 @@ export async function runGoalRun<Bot extends GoalRunMember>(deps: GoalRunDeps<Bo
     const watchedWorker = deps.watch ? await applyWatch(deps, workerResult.replyText, run.turnCount) : { stop: false };
     if (watchedWorker.stop) return;
     if (watchedWorker.nudge) {
-      coordinatorNote = [
+      coordinatorNote = withWatchCorrection(
         `Result from ${workerBot.name}:\n${workerResult.replyText.trim().slice(0, 2_000)}`,
-        `Watchdog correction: ${watchedWorker.nudge}`,
-      ].join("\n\n");
+        watchedWorker.nudge,
+      );
     }
   }
 

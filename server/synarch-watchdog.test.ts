@@ -136,6 +136,44 @@ describe("watchdog inside a goal run", () => {
     expect(watches).toBe(2);
   });
 
+  it("hands a coordinator nudge to a room worker before the next judgment", async () => {
+    const run = { goal: "Get every test passing", turnCount: 0, maxTurns: 13, finished: false };
+    const finished: Array<{ status: string }> = [];
+    const calls: Array<{ bot: string; instructions: string }> = [];
+    let watches = 0;
+    let leadTurns = 0;
+    await runGoalRun({
+      run,
+      coordinator: { id: "lead", name: "Lead" },
+      members: [{ id: "lead", name: "Lead" }, { id: "scout", name: "Scout" }],
+      cancelled: () => false,
+      current: (id) => id === "lead" ? { id: "lead", name: "Lead" } : { id: "scout", name: "Scout" },
+      step: async (bot, coordinator, instructions) => {
+        calls.push({ bot: bot.id, instructions });
+        run.turnCount += 1;
+        if (coordinator) {
+          leadTurns += 1;
+          return settled(leadTurns === 1
+            ? envelope({ status: "continue", next: "scout", instruction: "Fix the parser", detail: "Handed out" })
+            : envelope({ status: "completed", detail: "Fixed." }));
+        }
+        return settled("Opened the failing test and fixed it.");
+      },
+      finish: (status) => { run.finished = true; finished.push({ status }); },
+      progress: () => {},
+      note: () => {},
+      watch: async () => {
+        watches += 1;
+        if (watches === 1) return { action: "nudge", note: "Open the failing test first.", by: "Pro" };
+        return { action: "quiet" };
+      },
+    });
+    const scout = calls.find((call) => call.bot === "scout");
+    expect(scout?.instructions).toContain("Fix the parser");
+    expect(scout?.instructions).toContain("Watchdog correction: Open the failing test first.");
+    expect(finished).toEqual([{ status: "completed" }]);
+  });
+
   it("stays quiet when the watch reports ok", async () => {
     const run = { goal: "Ship it", turnCount: 0, maxTurns: 13, finished: false };
     const finished: Array<{ status: string }> = [];

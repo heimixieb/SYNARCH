@@ -16,7 +16,6 @@ export type WatchJudgment =
   | { verdict: "ok"; reason: string; by: string }
   | { verdict: "stuck" | "drifted"; reason: string; nudge: string; by: string }
   | { verdict: "needs_person"; reason: string; by: string }
-  /** No usable judgment: stay quiet; do not spend a nudge or escalate. */
   | { verdict: "skip"; reason: string; by: string };
 
 export type WatchAction =
@@ -25,11 +24,9 @@ export type WatchAction =
   | { action: "escalate"; reason: string; by: string };
 
 export interface WatchJob {
-  /** The conversation the goal or job runs in (the ledger the person sees). */
   threadId: string;
   bot: BotRecord;
   goal: string;
-  /** Newest work to judge: a worker reply, or the coordinator's visible progress. */
   latest: string;
   turn: number;
 }
@@ -52,7 +49,6 @@ export function parseWatchJudgment(text: string): { verdict: WatchVerdictKind; r
       return nudge ? { verdict: raw.verdict, reason, nudge } : null;
     }
   } catch {
-    // Malformed private line: no judgment.
   }
   return null;
 }
@@ -84,7 +80,6 @@ export const WATCH_REMINDER = [
   'Use "ok", "stuck", "drifted" or "needs_person", with reason; stuck/drifted also need nudge.',
 ].join("\n");
 
-/** Per-goal memory: one nudge, then one escalation; stay quiet otherwise. */
 export type WatchState = { nudged: boolean; escalated: boolean };
 
 export function nextWatchAction(state: WatchState, judgment: WatchJudgment): { action: WatchAction; state: WatchState } {
@@ -116,7 +111,6 @@ export interface SynarchWatchdogDeps {
   isUnattended(botId: string, threadId: string): boolean;
   judgeModel(bot: BotRecord, threadId: string): ModelSelection;
   modelName(selection: ModelSelection): string;
-  /** The person left the watchdog off (default). */
   off(): boolean;
 }
 
@@ -178,10 +172,8 @@ export function createSynarchWatchdog(deps: SynarchWatchdogDeps) {
     forget(threadId: string): void {
       states.delete(threadId);
     },
-    /** After a goal step settles: quiet, one nudge, or one escalation. */
     async inspect(job: WatchJob): Promise<WatchAction> {
       if (deps.off()) return { action: "quiet" };
-      // First coordinator turn has little to judge; silence until there is a ledger.
       if (job.turn < 2) return { action: "quiet" };
       const prior = stateOf(job.threadId);
       if (prior.escalated) return { action: "quiet" };
@@ -195,7 +187,6 @@ export function createSynarchWatchdog(deps: SynarchWatchdogDeps) {
 
 export type SynarchWatchdog = ReturnType<typeof createSynarchWatchdog>;
 
-/** Same model preference as the independent goal check: another vendor when possible. */
 export function pickWatchdogModel(menu: Pick<ModelMenu, "current" | "engines">, driverOf: (instanceId: string) => string | undefined): ModelSelection {
   return pickVerifierModel(menu, driverOf);
 }
